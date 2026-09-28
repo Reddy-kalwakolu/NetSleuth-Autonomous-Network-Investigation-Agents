@@ -1,0 +1,204 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 650" width="1040" height="650" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>The network NetSandbox simulates, and where its telemetry comes from</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1040" height="650" rx="14" fill="#ffffff"/>
+
+  <text x="30" y="38" font-size="18" font-weight="700" fill="#0f172a">The network NetSandbox simulates, and where the telemetry comes from</text>
+
+  <!-- ============ power ============ -->
+  <rect x="370" y="60" width="220" height="56" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="370" y="60" width="5" height="56" rx="2" fill="#16a34a"/>
+  <text x="384" y="78" font-size="12" font-weight="700" fill="#0f172a">Power supply reports</text>
+  <text x="384" y="94" font-size="11.5" fill="#334155">AC input, on battery or not,</text>
+  <text x="384" y="109" font-size="11.5" fill="#334155">battery voltage, runtime left</text>
+  <line x1="590" y1="86" x2="610" y2="86" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+  <rect x="610" y="64" width="140" height="44" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="680" y="83" font-size="12.5" font-weight="700" fill="#713f12" text-anchor="middle">Power supply</text>
+  <text x="680" y="99" font-size="11" fill="#854d0e" text-anchor="middle">battery lasts 2 to 4 hours</text>
+
+  <rect x="850" y="64" width="140" height="44" rx="8" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+  <text x="920" y="83" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Utility power</text>
+  <text x="920" y="99" font-size="11" fill="#475569" text-anchor="middle">split into power areas</text>
+
+  <g stroke="#ca8a04" stroke-width="1.8" stroke-dasharray="4 3" fill="none">
+    <line x1="850" y1="86" x2="750" y2="86"/>
+    <line x1="920" y1="108" x2="920" y2="128"/>
+    <line x1="640" y1="108" x2="560" y2="148"/>
+    <line x1="680" y1="108" x2="638" y2="158"/>
+    <line x1="720" y1="108" x2="716" y2="158"/>
+  </g>
+
+  <!-- ============ the chain ============ -->
+  <rect x="30" y="146" width="90" height="52" rx="8" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+  <text x="75" y="168" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Peering</text>
+  <text x="75" y="184" font-size="11" fill="#475569" text-anchor="middle">links</text>
+  <line x1="120" y1="172" x2="150" y2="172" stroke="#334155" stroke-width="3"/>
+
+  <rect x="150" y="146" width="90" height="52" rx="8" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+  <text x="195" y="168" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Backbone</text>
+  <text x="195" y="184" font-size="11" fill="#475569" text-anchor="middle">IP routers</text>
+  <line x1="240" y1="172" x2="270" y2="172" stroke="#334155" stroke-width="3"/>
+
+  <rect x="270" y="126" width="160" height="92" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="282" y="143" font-size="11" font-weight="700" fill="#64748b">HUB</text>
+  <rect x="286" y="150" width="128" height="52" rx="7" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="350" y="172" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">CMTS</text>
+  <text x="350" y="189" font-size="11" fill="#334155" text-anchor="middle">service groups</text>
+
+  <line x1="430" y1="172" x2="500" y2="172" stroke="#e8833a" stroke-width="4"/>
+  <text x="465" y="162" font-size="11.5" font-weight="700" fill="#c2621c" text-anchor="middle">fiber</text>
+
+  <rect x="500" y="148" width="90" height="48" rx="8" fill="#fff4ec" stroke="#e8833a" stroke-width="2"/>
+  <text x="545" y="168" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">Fiber node</text>
+  <text x="545" y="184" font-size="11" fill="#475569" text-anchor="middle">~400 homes</text>
+
+  <line x1="590" y1="172" x2="621" y2="172" stroke="#334155" stroke-width="3"/>
+  <polygon points="621,158 621,186 649,172" fill="#e2e8f0" stroke="#334155" stroke-width="1.5"/>
+  <line x1="649" y1="172" x2="701" y2="172" stroke="#334155" stroke-width="3"/>
+  <polygon points="701,158 701,186 729,172" fill="#e2e8f0" stroke="#334155" stroke-width="1.5"/>
+  <line x1="729" y1="172" x2="785" y2="172" stroke="#334155" stroke-width="3"/>
+  <rect x="785" y="167" width="10" height="10" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+  <line x1="795" y1="172" x2="858" y2="184" stroke="#334155" stroke-width="1.5"/>
+  <text x="675" y="164" font-size="11" fill="#64748b" text-anchor="middle">coax</text>
+  <text x="635" y="202" font-size="11" fill="#475569" text-anchor="middle">amp</text>
+  <text x="715" y="202" font-size="11" fill="#475569" text-anchor="middle">amp</text>
+  <text x="790" y="194" font-size="11" fill="#475569" text-anchor="middle">tap</text>
+
+  <polygon points="850,160 920,128 990,160" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+  <rect x="858" y="160" width="124" height="46" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+  <rect x="884" y="171" width="72" height="24" rx="4" fill="#16a34a"/>
+  <text x="920" y="187" font-size="11.5" font-weight="700" fill="#ffffff" text-anchor="middle">modem</text>
+  <text x="920" y="151" font-size="10.5" fill="#475569" text-anchor="middle">home</text>
+
+  <!-- ============ connectors to cards ============ -->
+  <g stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3">
+    <line x1="75" y1="198" x2="75" y2="250"/>
+    <line x1="350" y1="218" x2="350" y2="250"/>
+    <line x1="545" y1="196" x2="545" y2="250"/>
+    <line x1="635" y1="206" x2="660" y2="250"/>
+    <line x1="715" y1="206" x2="700" y2="250"/>
+    <line x1="920" y1="206" x2="920" y2="250"/>
+  </g>
+
+  <!-- ============ telemetry cards ============ -->
+  <!-- peering -->
+  <rect x="30" y="250" width="170" height="142" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="30" y="250" width="5" height="142" rx="2" fill="#2563eb"/>
+  <text x="46" y="272" font-size="13" font-weight="700" fill="#0f172a">Peering link</text>
+  <g font-size="11.5" fill="#334155">
+    <text x="46" y="292">utilization</text>
+    <text x="46" y="308">packet drops</text>
+    <text x="46" y="324">latency</text>
+  </g>
+
+  <!-- CMTS -->
+  <rect x="212" y="250" width="220" height="142" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="212" y="250" width="5" height="142" rx="2" fill="#2563eb"/>
+  <text x="228" y="272" font-size="13" font-weight="700" fill="#0f172a">CMTS, per service group</text>
+  <g font-size="11.5" fill="#334155">
+    <text x="228" y="292">modems online out of total</text>
+    <text x="228" y="308">upstream SNR per channel</text>
+    <text x="228" y="324">upstream and downstream load</text>
+    <text x="228" y="340">each modem's online state,</text>
+    <text x="228" y="356">upstream MER and power</text>
+    <text x="228" y="372">flap list</text>
+  </g>
+
+  <!-- fiber node -->
+  <rect x="444" y="250" width="160" height="142" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="444" y="250" width="5" height="142" rx="2" fill="#16a34a"/>
+  <text x="460" y="272" font-size="13" font-weight="700" fill="#0f172a">Fiber node</text>
+  <g font-size="11.5" fill="#334155">
+    <text x="460" y="292">optical receive level</text>
+    <text x="460" y="308">temperature</text>
+  </g>
+
+  <!-- amplifier -->
+  <rect x="616" y="250" width="180" height="142" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="616" y="250" width="5" height="142" rx="2" fill="#16a34a"/>
+  <text x="632" y="272" font-size="13" font-weight="700" fill="#0f172a">Amplifier</text>
+  <g font-size="11.5" fill="#334155">
+    <text x="632" y="292">input and output level</text>
+    <text x="632" y="308">temperature and status</text>
+    <text x="632" y="330" font-style="italic" fill="#64748b">only about 15% of</text>
+    <text x="632" y="346" font-style="italic" fill="#64748b">amplifiers report at all</text>
+  </g>
+
+  <!-- modem -->
+  <rect x="808" y="250" width="202" height="142" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="808" y="250" width="5" height="142" rx="2" fill="#16a34a"/>
+  <text x="824" y="272" font-size="13" font-weight="700" fill="#0f172a">Cable modem</text>
+  <g font-size="11.5" fill="#334155">
+    <text x="824" y="292">downstream power and MER</text>
+    <text x="824" y="308">upstream transmit power</text>
+    <text x="824" y="324">error codeword counters</text>
+    <text x="824" y="340">event log: T3, T4 timeouts</text>
+  </g>
+
+  <!-- ============ other sources ============ -->
+  <text x="30" y="443" font-size="12.5" font-weight="700" fill="#475569">Also generated</text>
+  <g font-size="12" fill="#334155" text-anchor="middle">
+    <rect x="150" y="424" width="206" height="28" rx="14" fill="#f1f5f9" stroke="#cbd5e1"/>
+    <text x="253" y="443">Alarms, delayed and flapping</text>
+    <rect x="368" y="424" width="128" height="28" rx="14" fill="#f1f5f9" stroke="#cbd5e1"/>
+    <text x="432" y="443">Customer tickets</text>
+    <rect x="508" y="424" width="92" height="28" rx="14" fill="#f1f5f9" stroke="#cbd5e1"/>
+    <text x="554" y="443">Change log</text>
+    <rect x="612" y="424" width="156" height="28" rx="14" fill="#f1f5f9" stroke="#cbd5e1"/>
+    <text x="690" y="443">Maintenance calendar</text>
+    <rect x="780" y="424" width="162" height="28" rx="14" fill="#f1f5f9" stroke="#cbd5e1"/>
+    <text x="861" y="443">Utility outage events</text>
+  </g>
+
+  <!-- ============ pipeline ============ -->
+  <text x="30" y="500" font-size="12.5" font-weight="700" fill="#475569">Where it all goes</text>
+  <g font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">
+    <rect x="30" y="512" width="140" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="100" y="536">Telemetry + events</text>
+    <rect x="198" y="512" width="140" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="268" y="536">Messy data layer</text>
+    <rect x="366" y="512" width="140" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="436" y="536">Parquet store</text>
+    <rect x="534" y="512" width="140" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="604" y="536">Anomaly detector</text>
+    <rect x="702" y="512" width="140" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="772" y="536">Incident grouper</text>
+    <rect x="870" y="512" width="140" height="56" rx="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="940" y="536">Agents, via MCP</text>
+  </g>
+  <g font-size="11" fill="#475569" text-anchor="middle">
+    <text x="100" y="554">every 5 to 15 minutes</text>
+    <text x="268" y="554">late, dropped, drifted</text>
+    <text x="436" y="554">DuckDB or Athena</text>
+    <text x="604" y="554">flags odd behaviour</text>
+    <text x="772" y="554">alerts into incidents</text>
+    <text x="940" y="554">investigate and fix</text>
+  </g>
+  <g stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)">
+    <line x1="170" y1="540" x2="196" y2="540"/>
+    <line x1="338" y1="540" x2="364" y2="540"/>
+    <line x1="506" y1="540" x2="532" y2="540"/>
+    <line x1="674" y1="540" x2="700" y2="540"/>
+    <line x1="842" y1="540" x2="868" y2="540"/>
+  </g>
+
+  <!-- ============ legend ============ -->
+  <line x1="30" y1="596" x2="1010" y2="596" stroke="#e2e8f0"/>
+  <g font-size="12" fill="#334155">
+    <rect x="30" y="611" width="5" height="16" rx="2" fill="#2563eb"/>
+    <text x="42" y="623">Measured in the hub, always present</text>
+    <rect x="290" y="611" width="5" height="16" rx="2" fill="#16a34a"/>
+    <text x="302" y="623">Sent over the cable itself, missing when the path to the hub breaks</text>
+    <line x1="746" y1="619" x2="770" y2="619" stroke="#e8833a" stroke-width="4"/>
+    <text x="778" y="623">Fiber</text>
+    <line x1="830" y1="619" x2="854" y2="619" stroke="#334155" stroke-width="3"/>
+    <text x="862" y="623">Coax</text>
+    <line x1="914" y1="619" x2="938" y2="619" stroke="#ca8a04" stroke-width="1.8" stroke-dasharray="4 3"/>
+    <text x="946" y="623">Power</text>
+  </g>
+</svg>

@@ -52,6 +52,10 @@ Three pieces that work together.
 
 **1. NetSandbox, a cable network simulator.** It models a hybrid fiber coax (HFC) network from hub to CMTS to fiber nodes, amplifiers and a few thousand modems. It runs forward in five minute steps and produces the telemetry a real operations team would see, including the messy parts: late data, duplicate rows, inventory records that don't match reality, and devices that go silent when their parent fails. I inject faults with a known answer, and when an agent applies a fix, the simulator shows whether it worked.
 
+<p align="center">
+  <img src="docs/images/netsandbox-topology.svg" alt="The simulated network from peering links and backbone, through the hub and CMTS, over fiber to a fiber node, then over coax through amplifiers and a tap to a home modem, with power supplies and utility power. Below each device is the telemetry it reports, marked as either measured in the hub or sent over the cable itself. At the bottom, the data flows through a messy data layer, a Parquet store, an anomaly detector and an incident grouper to the agents." width="900"/>
+</p>
+
 **2. The agents.** An investigation agent finds the root cause and its location. A recommendation agent picks a fix from a runbook. A person approves it, plain code applies it, and a verify step checks the network afterwards.
 
 **3. An evaluation harness.** It scores every run against the hidden ground truth, and it runs the same cases through a hand written rules engine and a single LLM prompt so the agent always has something serious to beat.
