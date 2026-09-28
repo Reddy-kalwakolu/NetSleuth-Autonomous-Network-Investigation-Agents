@@ -1,1 +1,9 @@
 notes/
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+data/
+ground_truth/
