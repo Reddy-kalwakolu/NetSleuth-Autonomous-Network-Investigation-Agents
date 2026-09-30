@@ -72,6 +72,9 @@ class Topology:
     def __getitem__(self, device_id: str) -> Device:
         return self._devices[device_id]
 
+    def __contains__(self, device_id: object) -> bool:
+        return device_id in self._devices
+
     def of_type(self, device_class: type[T]) -> list[T]:
         return [d for d in self._devices.values() if isinstance(d, device_class)]
 
