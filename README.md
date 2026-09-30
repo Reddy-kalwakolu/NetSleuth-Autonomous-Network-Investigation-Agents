@@ -10,7 +10,7 @@
 ![LangSmith](https://img.shields.io/badge/tracing-LangSmith-F2A93B)
 ![AWS](https://img.shields.io/badge/data-S3%20%7C%20Athena%20%7C%20Spark-FF9900)
 
-[The problem](#the-problem) · [Why it's hard](#why-its-harder-than-it-looks) · [What I'm building](#what-im-building) · [The agents](#inside-the-agents) · [Proving it works](#proving-it-works) · [Milestones](#milestones) · [Full design](docs/proposal-v2.md)
+[The problem](#the-problem) · [Why it's hard](#why-its-harder-than-it-looks) · [What I'm building](#what-im-building) · [The agents](#inside-the-agents) · [Proving it works](#proving-it-works) · [Milestones](#milestones) · [Full design](docs/design.md)
 
 </div>
 
@@ -221,7 +221,7 @@ Some scenarios combine two of these at once. The novel fault types are left off 
 | Scale | A Spark job over a large simulated run | Hundreds of millions of modem rows rolled up into the tables the agents query. |
 | Model provider | Anthropic API first, Bedrock second, both through LangChain chat models | Fast to start, and switching providers is a config change. |
 
-The full reasoning, including everything I chose to leave out, is in [the design doc](docs/proposal-v2.md).
+The full reasoning, with everything I chose to leave out and a log of every major decision and the alternatives I considered, is in [the design doc](docs/design.md).
 
 ## Milestones
 

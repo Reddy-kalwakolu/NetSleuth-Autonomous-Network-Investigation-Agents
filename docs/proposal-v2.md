@@ -1,5 +1,8 @@
 # NetSleuth: Network Operations AI Agents, Evaluated in a Safe Sandbox
 
+> **This proposal is kept as history.** The current design and source of truth is [design.md](design.md).
+
+
 | | |
 |---|---|
 | Author | Chandra Prakash Reddy |
