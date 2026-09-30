@@ -219,7 +219,7 @@ Some scenarios combine two of these at once. The novel fault types are left off 
 | Data access | Everything goes through MCP | It's how agents plug into live data in production, and other agents can reuse the tools. |
 | Storage | DuckDB locally, Athena in the cloud | Same Parquet files behind one interface. The agents can't tell which backend they're on. |
 | Scale | A Spark job over a large simulated run | Hundreds of millions of modem rows rolled up into the tables the agents query. |
-| Model provider | Anthropic API first, Bedrock second | Fast to start, swappable later through one model interface. |
+| Model provider | Anthropic API first, Bedrock second, both through LangChain chat models | Fast to start, and switching providers is a config change. |
 
 The full reasoning, including everything I chose to leave out, is in [the design doc](docs/proposal-v2.md).
 
@@ -241,12 +241,13 @@ I'm building this in seven milestones.
 
 | Layer | Tools |
 |---|---|
-| Agents | LangGraph, Pydantic, Anthropic API, AWS Bedrock |
-| Tools | MCP Python SDK, langchain-mcp-adapters |
-| Simulator | Python, networkx, numpy, polars |
+| Agents | LangGraph with a SQLite checkpointer, LangChain chat models (Anthropic, AWS Bedrock), Pydantic |
+| Tools | MCP Python SDK, langchain-mcp-adapters (stdio locally, Streamable HTTP in compose) |
+| Simulator | Python, numpy, polars |
 | Data | Parquet, DuckDB, S3, Athena, boto3, PySpark |
 | Quality | pytest, ruff, mypy, LangSmith, GitHub Actions |
-| Packaging | Docker, docker compose |
+| Service | FastAPI agent service for investigations and approvals |
+| Packaging | uv with a lock file, Docker, docker compose |
 
 ---
 

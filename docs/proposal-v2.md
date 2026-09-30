@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Author | Chandra Prakash Reddy |
-| Version | v2, September 24, 2026. Replaces the v1 "NetSandbox" proposal |
+| Version | v2.1, September 30, 2026. v2 was September 24. Replaces the v1 "NetSandbox" proposal |
 | Status | Direction agreed. Open items are in Section 16 |
 | Repo | https://github.com/Reddy-kalwakolu/NetSleuth-Autonomous-Network-Investigation-Agents |
 
@@ -48,6 +48,20 @@ After a close review of v1, I made these changes.
 | 11 | The plan is now 7 weeks, about 140 hours. | v1 was roughly 40% over budget. |
 | 12 | I start on the Anthropic API behind a model interface, with Bedrock as a second backend. | Quicker to get going, and Bedrock keeps an AWS native path open. |
 | 13 | I dropped the claim that temperature 0 makes runs deterministic. I now say runs are reproducible through pinned prompts, fixed seeds and recorded traces. | The old claim wasn't true. |
+
+### 0.1 Stack review, September 30, 2026
+
+After the first two build tasks I checked every library and tool choice against current versions and against the rest of the design. The architecture stands. These are the changes.
+
+| # | Change | Why |
+|---|---|---|
+| 1 | Models come through LangChain chat models (`ChatAnthropic`, `ChatBedrockConverse`) with `with_structured_output`, instead of a custom `ChatModel` interface. | They already share one interface and plug straight into LangGraph and LangSmith. Swapping providers stays a config change, with less code to maintain. |
+| 2 | A LangGraph checkpointer (`langgraph-checkpoint-sqlite`) is part of the core. | `interrupt` needs a checkpointer to pause for approval. SQLite keeps a paused run alive across restarts. |
+| 3 | MCP runs over stdio in tests and local runs, and over Streamable HTTP in docker compose. The harness sets the run ID and `as_of` on the connection. | stdio can't cross containers, and the MCP server and agent run in separate containers. The model still has no way to change the run or the clock. |
+| 4 | A thin FastAPI agent service starts investigations, returns reports, and takes approve, edit or reject decisions on pending actions. | The approval step needs a real interface for the demo, and a small REST service is what a gateway would sit in front of. About 5 hours in week 4, taken from the week 7 buffer. |
+| 5 | Spark runs only in Docker, on an image with Java 17. | PySpark 4 needs Java 17 or later. Docker keeps the dev machine unchanged. |
+| 6 | networkx and pyarrow are dropped. | The topology uses plain parent and child maps, and polars and DuckDB read and write Parquet natively. |
+| 7 | Python 3.12 or later, and dependencies locked with uv (`uv.lock`). | Current numpy needs 3.12. The lock file makes installs identical on every machine and in CI, which NF2 depends on. |
 
 ## 1. Context
 
@@ -162,10 +176,10 @@ In one line: a safe place to test network operations agents before they touch pr
 
 ### 4.2 Quality requirements
 
-* NF1. Python 3.11 or later, object oriented, typed, with Pydantic models. Checked with ruff, mypy and pytest.
-* NF2. Reproducible runs through seeded simulation, pinned prompt versions and recorded traces.
+* NF1. Python 3.12 or later, object oriented, typed, with Pydantic models. Checked with ruff, mypy and pytest.
+* NF2. Reproducible runs through seeded simulation, pinned prompt versions, recorded traces and a uv lock file.
 * NF3. Under $50 a month for LLM and AWS together. I measure cost per case in week 2, before scaling up evaluation runs.
-* NF4. Development works on Windows. Spark runs in Docker or WSL2.
+* NF4. Development works on Windows. Spark runs in Docker.
 * NF5. Every new feature has to pass the scope rule in Section 5.4.
 
 ### 4.3 Explicitly out of scope
@@ -191,6 +205,7 @@ In one line: a safe place to test network operations agents before they touch pr
 * DuckDB storage with the `as_of` cutoff, and an Athena backend with one demo run.
 * The detector and the rule based incident grouper.
 * The MCP server.
+* A thin FastAPI agent service for starting investigations and approving actions.
 * The Investigation agent, and the Recommendation agent with approval, execution and verification.
 * The rules baseline, the single prompt baseline, the evaluation harness with incident scoring, calibration and LangSmith.
 * Scenario files built from effect primitives.
@@ -372,7 +387,7 @@ Both backends share one subset of SQL, and all of it lives inside the tools. The
 
 ### 7.6 Spark
 
-A PySpark job, run in Docker or WSL2, rolls the `scale` data up into hourly summaries per node: share offline, T3 and T4 rates, RF percentiles and codeword increases. The tools read these summary tables. The raw data itself is generated with numpy and polars.
+A PySpark job, run in Docker on a Java 17 image, rolls the `scale` data up into hourly summaries per node: share offline, T3 and T4 rates, RF percentiles and codeword increases. The tools read these summary tables. The raw data itself is generated with numpy and polars.
 
 ### 7.7 Detector and incident grouping
 
@@ -420,7 +435,7 @@ All tools are read only. Each MCP session is tied to one run ID and one `as_of` 
 
 `apply_action` is not available to the LLM. Actions only go through the executor step described in Section 10.3.
 
-In weeks 1 and 2 I write the tools as plain Python functions. In week 3 I wrap them in MCP. The graph talks to the server through `langchain-mcp-adapters` over stdio.
+In weeks 1 and 2 I write the tools as plain Python functions. In week 3 I wrap them in MCP. The graph talks to the server through `langchain-mcp-adapters`: over stdio in tests and local runs, and over Streamable HTTP in docker compose. The harness sets the run ID and `as_of` on the connection, not the model.
 
 ## 10. Agents
 
@@ -460,7 +475,7 @@ This agent maps the investigation report to candidate actions from a runbook tab
 
 ### 10.3 Approval, execution and verification
 
-1. `interrupt` shows the proposed action. A person approves, edits or rejects it through the resume payload. During evaluation, a scripted approver follows a fixed policy.
+1. `interrupt` pauses the graph and a SQLite checkpointer saves its state. The FastAPI agent service shows the proposed action, and a person approves, edits or rejects it, which resumes the graph. During evaluation, a scripted approver follows a fixed policy.
 2. The executor is plain code. It checks the approved action against the runbook, calls `sandbox.apply_action`, then forks and moves the simulation forward.
 3. The verify step runs with `as_of` set N ticks after the action, on the branched run, and reports resolved, partly resolved or not resolved. If nothing got fixed, the agent investigates once more or escalates.
 
@@ -546,10 +561,10 @@ I derive these from evaluation results, state every assumption, and label them a
 
 ## 12. Engineering and deployment
 
-* Stack: Python 3.11 or later, Pydantic, networkx, numpy, polars, DuckDB, pyarrow, LangGraph, LangSmith, the MCP Python SDK, langchain-mcp-adapters, boto3 and PySpark. Tested and checked with pytest, ruff and mypy.
-* Models: one `ChatModel` interface with the model ID in config. The Anthropic API is the first backend, and Bedrock is the second, for an AWS native option. I use prompt caching where it helps.
+* Stack: Python 3.12 or later, Pydantic, numpy, polars, DuckDB, LangGraph with a SQLite checkpointer, LangChain chat models, LangSmith, the MCP Python SDK, langchain-mcp-adapters, FastAPI, boto3 and PySpark. Dependencies are locked with uv. Tested and checked with pytest, ruff and mypy.
+* Models: LangChain chat models with the provider and model ID in config. `ChatAnthropic` is the first backend, and `ChatBedrockConverse` is the second, for an AWS native option. Typed outputs use `with_structured_output`. I use prompt caching where it helps.
 * Budget: under $50 a month for LLM and AWS together. I measure cost per case in week 2 and size the regression split and nightly runs from that. AWS is only used for S3 and Athena in the demo.
-* Containers: Docker images for the sandbox and storage, the MCP server and the agent service, with docker compose to run everything locally.
+* Containers: Docker images for the sandbox and storage, the MCP server (Streamable HTTP) and the FastAPI agent service, plus a Spark image with Java 17, with docker compose to run everything locally.
 * CI: GitHub Actions, since the repo is on GitHub. The pipeline is a set of plain jobs (lint, test, eval, build), so it would move to GitLab CI without much work.
 * Observability: LangSmith tracing on every run, and structured JSON logs.
 
@@ -568,7 +583,8 @@ NetSleuth-Autonomous-Network-Investigation-Agents/
     detector/           detector and incident grouper
     tools/              investigation tools as plain Python
     mcp_server/         MCP wrapper around the tools
-    models/             model interface, Anthropic and Bedrock backends
+    models/             chat model setup from config, Anthropic and Bedrock
+    api/                FastAPI agent service: investigations and approvals
     agents/
       investigation/  recommendation/  closed_loop/
       prompts/          versioned
@@ -593,12 +609,12 @@ Seven weeks at about 20 hours a week, roughly 140 hours in total.
 | Week | What I build | Done when |
 |---|---|---|
 | 1 | The thin slice: repo skeleton, `dev` topology with fiber routes and power areas, the engine with primitives, in band telemetry for modems, service groups and nodes, DuckDB with the `as_of` cutoff, a minimal detector, F1 only, the rules baseline, a minimal harness and 3 to 5 scenarios | `netsleuth run scenarios/dev/f1_*.yaml` runs a scenario, finds anomalies, runs the rules baseline and prints a score |
-| 2 | F2, F3 and D1, the tools as plain Python, Investigation agent v1, the model interface, cost per case measured, LangSmith, the single prompt baseline, about 20 dev cases, basic CI, and the holdout and novel scenarios sealed | The agent and both baselines are scored on the dev set |
+| 2 | F2, F3 and D1, the tools as plain Python, Investigation agent v1, chat model setup, cost per case measured, LangSmith, the single prompt baseline, about 20 dev cases, basic CI, and the holdout and novel scenarios sealed | The agent and both baselines are scored on the dev set |
 | 3 | The MCP wrapper, F4, F5, D2 and D3, incident ground truth, the grouper and incident scoring (including the true groups variant), messy data, at least 60 cases, and my written expectations | First holdout numbers for the agent and both baselines |
-| 4 | The Recommendation agent, `interrupt`, the executor, fork and advance, the verify step with a later `as_of`, and partial relief for F2 | Closed loop resolution rate reported |
+| 4 | The Recommendation agent, `interrupt` with the SQLite checkpointer, the FastAPI agent service, the executor, fork and advance, the verify step with a later `as_of`, and partial relief for F2 | Closed loop resolution rate reported |
 | 5 | Docker and compose, the regression gate in GitHub Actions, calibration and the abstention threshold, and failure analysis from traces | CI blocks a deliberately broken prompt |
 | 6 | The Athena backend with a demo run, the Spark job over `scale`, one round of improvements, and the final holdout and novel runs | The final results table with confidence intervals |
-| 7 | Design doc, evaluation report, README and demo video, plus about 8 hours of buffer | Ready to share |
+| 7 | Design doc, evaluation report, README and demo video, plus about 3 hours of buffer | Ready to share |
 
 If I fall behind, I cut in this order: Tier 3, then Tier 2, then the Athena demo run (keeping the interface and its test), then shrinking the Spark job to a larger `eval` run, then D2.
 
@@ -630,7 +646,7 @@ If week 1 runs over, tasks 7 and 8 move to the start of week 2. The scope stays 
 | The simulator grows out of control | A 45 hour cap, the scope rule, and primitives instead of custom code for each fault |
 | The evaluation set is small and its cases are related | Bootstrapping by template, results per fault type, and case by case comparisons |
 | LLM costs | Measure cost per case in week 2, tiered CI, cached results and a $50 monthly cap |
-| Week 1 is overloaded | I expect some of it to spill into week 2. The 7 week plan has about 8 hours of buffer |
+| Week 1 is overloaded | I expect some of it to spill into week 2. The 7 week plan has about 3 hours of buffer after the FastAPI service was added |
 
 ## 16. Open items
 
