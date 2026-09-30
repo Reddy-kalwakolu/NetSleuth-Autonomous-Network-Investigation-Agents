@@ -101,13 +101,15 @@ NetSandbox addresses both, and the agents are built and measured on top of it.
 * R16. Human approval through LangGraph `interrupt`, persisted by a checkpointer, then a plain code executor.
 * R17. A verify step that reads telemetry after the action and reports the outcome.
 * R18. A FastAPI service that starts investigations, returns reports, and takes approval decisions.
+* R19. A thin conversational agent that routes an engineer's questions to the other agents and tools, and remembers the conversation.
 
 **Evaluation**
 
-* R19. A rules baseline and a single prompt baseline run on the same cases as the agent.
-* R20. Metrics checked by code and scored per incident, including a variant with the true incident groups.
-* R21. LangSmith datasets and experiments for every prompt and graph version.
-* R22. Tiered CI with a regression gate.
+* R20. A rules baseline and a single prompt baseline run on the same cases as the agent.
+* R21. Metrics checked by code and scored per incident, including a variant with the true incident groups.
+* R22. An expert review workflow: a LangSmith annotation queue with a rubric, and agreement between reviewers measured.
+* R23. LangSmith datasets and experiments for every prompt and graph version.
+* R24. Tiered CI with a regression gate.
 
 ### 4.2 Quality
 
@@ -139,6 +141,8 @@ flowchart TB
     subgraph SVC [Agent service]
         direction LR
         API[FastAPI] --> INV[Investigation]
+        API --> CONV[Conversational<br/>routes, remembers]
+        CONV --> INV
         INV --> REC[Recommendation]
         REC --> INT{Approval<br/>interrupt + checkpointer}
         INT --> EXE[Executor<br/>plain code]
@@ -375,9 +379,23 @@ Maps the report to candidate actions from a runbook table, where each row has th
 3. **Apply.** The executor is plain code. It checks the approved action against the runbook, calls the sandbox, then forks and runs the simulation forward.
 4. **Verify.** A code step reads telemetry at a later `as_of` on the branched run and reports resolved, partly resolved or not resolved. If nothing was fixed, the agent investigates once more or escalates.
 
-### 10.5 Stretch agents
+### 10.5 Conversational agent
 
-A data lake exploration agent turns questions into SQL over Athena, restricted to SELECT on approved tables with a row limit, a timeout and validation before running. A conversational agent is a front door for the operations team that routes questions to the other agents and tools.
+A thin front door for an operations engineer. It is a small LangGraph graph with three steps:
+
+| Step | Done by | What it does |
+|---|---|---|
+| `route` | LLM, structured | Classifies the question: start or check an investigation, explain a report, list pending actions, or look something up |
+| `act` | code | Calls the matching path: the investigation graph, a stored report, the pending action queue, or a read only MCP tool |
+| `answer` | LLM | Writes the reply from what `act` returned, citing report fields and `query_ref` handles |
+
+**Memory.** The conversation's messages live in the graph state, saved by the same SQLite checkpointer, so a follow up like "why not a fiber cut?" resolves against the report already discussed. The agent can't approve actions. It only points to the approval endpoint.
+
+**Evaluation.** A fixed set of scripted conversations checks routing accuracy and whether each answer cites the right report fields, all checked by code.
+
+### 10.6 Stretch agent
+
+A data lake exploration agent turns questions into SQL over Athena, restricted to SELECT on approved tables with a row limit, a timeout and validation before running.
 
 ## 11. Agent service API
 
@@ -388,6 +406,7 @@ A thin FastAPI service is the entry point for people and for a gateway in front 
 | `POST /investigations` | Start an investigation for an incident. Returns a thread ID |
 | `GET /investigations/{thread_id}` | Status, the report once ready, and any pending action |
 | `POST /investigations/{thread_id}/decision` | Approve, edit or reject the pending action, with an optional note. Resumes the graph |
+| `POST /conversations/{thread_id}/messages` | Send a message to the conversational agent. A new thread ID starts a new conversation |
 | `GET /health` | Liveness |
 
 The request body names the incident, never a time. The service derives `as_of` from the incident's detection time. Each thread ID maps to one LangGraph checkpoint thread.
@@ -435,6 +454,8 @@ Before the first holdout run, I record my expectations: rules should match or be
 Cases from the same template are related, so confidence intervals are bootstrapped by template. Results are broken down by fault type and split, and versions are compared case by case.
 
 An LLM judge rates one thing only: how clear and useful a report is to an operations engineer, against a rubric. I hand label about 20 reports and report the agreement rate.
+
+**Expert review workflow.** Reports and their evidence go into a LangSmith annotation queue with a written rubric: is the root cause right, is the location right, does the evidence support it, and would an engineer act on it. At least two reviewers label a shared sample, ideally me and a network engineer, and I report agreement between them with Cohen's kappa. Labels the reviewers agree on become gold examples. This is the same workflow a team would use to build gold sets from production incidents, exercised here on sandbox output.
 
 ### 12.5 CI tiers
 
@@ -517,11 +538,11 @@ Each behaviour gets a failing test before its code. For key behaviours I also br
 
 ### 15.1 Tiers
 
-**Tier 1, committed:** topology, engine, in band telemetry, event streams and messy data; F1 to F5 and D1 to D3; DuckDB storage with the cutoff and an Athena backend with one demo run; detector and grouper; the MCP server; the FastAPI agent service; the investigation and recommendation agents with approval, execution and verification; both baselines, the harness, calibration and LangSmith; scenario files from primitives; Docker and CI with the regression gate; the Spark job over `scale`.
+**Tier 1, committed:** topology, engine, in band telemetry, event streams and messy data; F1 to F5 and D1 to D3; DuckDB storage with the cutoff and an Athena backend with one demo run; detector and grouper; the MCP server; the FastAPI agent service; the investigation and recommendation agents with approval, execution and verification; a thin conversational agent; the expert review workflow; both baselines, the harness, calibration and LangSmith; scenario files from primitives; Docker and CI with the regression gate; the Spark job over `scale`.
 
-**Tier 2, if on schedule:** the D4 decoy, LLM driven incident grouping, a business metrics section, an expert annotation workflow demo.
+**Tier 2, if on schedule:** the D4 decoy, LLM driven incident grouping, a business metrics section.
 
-**Tier 3, stretch:** the data lake exploration agent, the conversational front door, Remote PHY nodes, a one command AWS deploy and teardown.
+**Tier 3, stretch:** the data lake exploration agent, Remote PHY nodes, a one command AWS deploy and teardown.
 
 **Out of scope:** live replay on a wall clock, infrastructure as code and Glue crawlers, clock skew and duplicate tickets, free SQL for the investigation agent, generating the large dataset with Spark, simulated business metrics on their own, service groups shared by several nodes, DOCSIS 3.1 OFDM and PNM data, LLM written ticket text, an always on public demo.
 
@@ -531,7 +552,7 @@ Before anything is added: does an agent or the evaluation need this? If not, it 
 
 ### 15.3 Milestones
 
-Seven milestones at about 20 hours a week, roughly 140 hours in total.
+Eight milestones, roughly 150 hours in total. Milestones 1 to 6 and 8 are about 20 hours each, and milestone 7 is a short one of about 10 hours.
 
 | # | What gets built | Done when |
 |---|---|---|
@@ -541,9 +562,10 @@ Seven milestones at about 20 hours a week, roughly 140 hours in total.
 | 4 | Recommendation agent, `interrupt` with the checkpointer, the FastAPI service, the executor, fork and advance, verify | Closed loop resolution rate reported |
 | 5 | Docker and compose, the regression gate, calibration and the abstention threshold, failure analysis from traces | CI blocks a deliberately broken prompt |
 | 6 | Athena demo run, the Spark job, one round of improvements, final holdout and novel runs | Final results with confidence intervals |
-| 7 | This design doc updated with results, evaluation report, failure analysis, README and demo video, with about 3 hours of buffer | Ready to share |
+| 7 | The conversational agent and the expert review workflow | Scripted conversations pass, and reviewer agreement is reported |
+| 8 | This design doc updated with results, evaluation report, failure analysis, README and demo video, with about 4 hours of buffer | Ready to share |
 
-If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keeping the interface and its test), the Spark job size, then D2. I don't cut the baselines, the time cutoff, holdout discipline, incident scoring or the closed loop.
+If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keeping the interface and its test), the Spark job size, the conversational agent, then D2. I don't cut the baselines, the time cutoff, holdout discipline, incident scoring or the closed loop.
 
 ## 16. Risks
 
@@ -582,6 +604,10 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | D-19 | Line card as a service group attribute | A separate line card device | The grouper only needs shared card membership, and the tree stays simpler |
 | D-20 | uv with a lock file | pip ranges, pip-tools | Identical installs everywhere, which reproducibility depends on, and fast CI |
 | D-21 | Anthropic API first, Bedrock second | Bedrock only | Quicker to start. Bedrock keeps an AWS native path open behind the same interface |
+| D-22 | A thin conversational agent in the core | Leaving it as a stretch goal | It exercises conversation memory and orchestration across agents, for about 6 hours |
+| D-23 | An expert review workflow in the core | A demo only if on schedule | Gold data built with domain experts is how agent quality gets measured in production, so the workflow belongs in the core |
+| D-24 | A short eighth milestone for the additions | Absorbing them with zero buffer, or shrinking the Spark job | A solo plan with no buffer tends to force hurried cuts later, and the Spark job stays at full scale |
+| D-25 | The data lake exploration agent stays a stretch goal | Moving it into the core | The time goes to memory, orchestration and expert review instead. SQL and Athena are still exercised by the tools and the storage backend |
 
 ## 18. Open questions
 

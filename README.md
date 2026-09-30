@@ -225,7 +225,7 @@ The full reasoning, with everything I chose to leave out and a log of every majo
 
 ## Milestones
 
-I'm building this in seven milestones.
+I'm building this in eight milestones.
 
 | # | Milestone | Done when |
 |---|---|---|
@@ -235,7 +235,8 @@ I'm building this in seven milestones.
 | 4 | Recommendation agent and the full approve, apply, verify loop | Closed loop recovery rate reported |
 | 5 | Docker and a CI gate on GitHub Actions | CI blocks a deliberately broken prompt |
 | 6 | Athena backend, Spark at scale, final holdout and novel runs | Final results with confidence intervals |
-| 7 | Evaluation report, failure analysis, demo video | Ready to share |
+| 7 | Conversational agent with memory, and an expert review workflow for gold data | Scripted conversations pass, and reviewer agreement is reported |
+| 8 | Evaluation report, failure analysis, demo video | Ready to share |
 
 ## Tech stack
 
