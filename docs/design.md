@@ -309,7 +309,11 @@ A PySpark job rolls the `scale` run up into hourly summaries per node: share off
 
 ## 8. Detection and incident grouping
 
-The detector is deliberately simple. It applies rolling z scores and thresholds to node summaries (share offline, T3 and T4 rates, median upstream MER), service group SNR and utilization, ticket volume per area, and peering utilization and latency. Each hit becomes a row in `anomaly_events`. Its misses and false alarms are useful test material.
+The detector is deliberately simple, and it grows one signal at a time. Each hit becomes a row in `anomaly_events`, and its misses and false alarms are useful test material.
+
+**Share offline per node (milestone 1).** It reads the CMTS view, which is always present, and finds each modem's node from the stored inventory with a recursive query. A node is flagged when its share offline rises at least 2 points above its own median over the last hour and at least 5 modems are down. A lasting outage raises one anomaly at its onset. Because the median catches up with a standing outage, a second failure on an already dark node still raises a fresh anomaly.
+
+**Later signals.** T3 and T4 timeout rates arrive with the modem event log in milestone 2, alongside ingress noise. They travel over the plant in band, so they go quiet during a full outage and matter most for intermittent faults. RF based signals for partial failures, service group SNR and utilization, ticket volume per area, and peering utilization and latency follow with the faults that need them.
 
 The grouper uses fixed rules on the stored inventory. Anomalies close in time are merged when they share a fiber route, power area, CMTS line card, or a CMTS with a recent change. Each incident records its anomalies, the reason for grouping and the detection time. Because it uses the stored inventory, inventory drift can mislead it, just as it would in production.
 
