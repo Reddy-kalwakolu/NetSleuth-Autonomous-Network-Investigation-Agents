@@ -240,15 +240,22 @@ I'm building this in eight milestones.
 
 ## Tech stack
 
-| Layer | Tools |
-|---|---|
-| Agents | LangGraph with a SQLite checkpointer, LangChain chat models (Anthropic, AWS Bedrock), Pydantic |
-| Tools | MCP Python SDK, langchain-mcp-adapters (stdio locally, Streamable HTTP in compose) |
-| Simulator | Python, numpy, polars |
-| Data | Parquet, DuckDB, S3, Athena, boto3, PySpark |
-| Quality | pytest, ruff, mypy, LangSmith, GitHub Actions |
-| Service | FastAPI agent service for investigations and approvals |
-| Packaging | uv with a lock file, Docker, docker compose |
+Every tool here has one job. This is where each one shows up as a single outage moves through the system.
+
+| Stage | Tool | How I use it |
+|---|---|---|
+| **1. Break something** | numpy, polars | Build the network, give every device a daily pattern and noise, and write each 5 minute tick of telemetry |
+| **2. Store it** | Parquet, DuckDB | Columnar files on disk. DuckDB queries them locally, behind a hard time cutoff so no agent can see the future |
+| | S3, Athena, boto3 | The same Parquet files in the cloud, queried by Athena through the same storage interface |
+| | PySpark | Rolls about 430 million modem readings from a month long run into hourly summaries per node |
+| **3. Hand it over** | MCP SDK, langchain-mcp-adapters | Read only investigation tools. stdio on my machine, Streamable HTTP between containers |
+| **4. Investigate** | LangGraph | The investigation graph: code steps for lookups, LLM steps for judgment, and hard caps on every loop |
+| | LangChain chat models | Claude through the Anthropic API or AWS Bedrock, switched in config, with typed structured output |
+| | Pydantic | Typed state, reports and proposed actions, validated at every step |
+| **5. Ask a person** | FastAPI, SQLite checkpointer | The graph pauses before any fix, survives a restart, and resumes when someone approves over REST |
+| **6. Prove it** | LangSmith | Traces every run, holds the evaluation datasets, and runs the expert review queue |
+| | pytest | Tests come before code, and I break the code on purpose to prove the tests catch it |
+| **7. Ship it** | uv, ruff, mypy, Docker, GitHub Actions | Locked dependencies, strict type checks, one container per service, and a CI gate that blocks a prompt change if it breaks passing cases |
 
 ---
 
