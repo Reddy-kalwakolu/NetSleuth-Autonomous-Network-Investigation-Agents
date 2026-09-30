@@ -47,6 +47,8 @@ class Engine:
         self.tick_minutes = tick_minutes
         self.rng = np.random.default_rng(seed)
         self.tick = 0
+        # Goes up whenever an effect is applied, so readers can cache anything derived from state.
+        self.revision = 0
 
         self._states: dict[str, DeviceState] = {}
         self._offsets: dict[str, tuple[float, float]] = {}
@@ -99,8 +101,11 @@ class Engine:
 
     def _apply_current_tick(self) -> None:
         status_changed = False
-        for effect in self._schedule.pop(self.tick, []):
+        effects = self._schedule.pop(self.tick, [])
+        for effect in effects:
             status_changed |= self._apply(effect)
+        if effects:
+            self.revision += 1
         if status_changed:
             self._recompute_reachability()
 

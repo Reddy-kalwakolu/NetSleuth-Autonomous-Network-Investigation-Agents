@@ -289,7 +289,7 @@ data/<run_id>/<table>/dt=YYYY-MM-DD/part-*.parquet
 data/<run_id>__b<k>/...        branched runs
 ```
 
-polars writes the Parquet files. The main tables are `topology_devices`, `topology_edges`, `cm_status`, `cm_rf`, `cm_events`, `flap_list`, `sg_channels`, `node_optical`, `amp_telemetry`, `ps_status`, `peering`, `alarms`, `tickets`, `change_log`, `maintenance`, `power_events`, `anomaly_events` and `incidents`, plus the hourly node summaries from Spark.
+polars writes the Parquet files. The main tables are `topology_devices`, `topology_edges`, `cm_status`, `cm_rf`, `cm_events`, `flap_list`, `sg_channels`, `sg_status`, `node_optical`, `amp_telemetry`, `ps_status`, `peering`, `alarms`, `tickets`, `change_log`, `maintenance`, `power_events`, `anomaly_events` and `incidents`, plus the hourly node summaries from Spark.
 
 ### 7.2 Storage interface and the time cutoff
 
