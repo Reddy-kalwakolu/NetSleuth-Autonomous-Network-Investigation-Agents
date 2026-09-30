@@ -295,7 +295,13 @@ polars writes the Parquet files. The main tables are `topology_devices`, `topolo
 
 One `Storage` interface has two backends: DuckDB (the default, used for development and evaluation) and Athena (with explicit table definitions and partition projection). Both use one shared subset of SQL, and all SQL lives inside the tools. Agents never write SQL.
 
-A storage session is created with a run ID and an `as_of` time, and every query it runs is filtered to rows at or before `as_of`. Only the harness creates sessions. A leakage test checks that no query can return a row past the cutoff.
+A storage session is created with a run ID and an `as_of` time, and every query it runs is filtered to rows at or before `as_of`. Only the harness creates sessions. In the DuckDB backend the cutoff has three layers:
+
+1. **Views.** Each session gets one view per table. Timed tables are filtered to `ts <= as_of` inside the view, so any query that names a table only sees data from before the cutoff.
+2. **Lock.** The session's connection may read only its own run's folder, and the setting is locked. It can't reach the ground truth, another run, or anything else on disk.
+3. **Guard.** `query` accepts a single SELECT or WITH statement and rejects anything that reads files directly, which is the only remaining way to reach rows past the cutoff inside the run's folder.
+
+A leakage test checks every table at several cutoffs, including rows exactly at `as_of`. Results come back as polars frames in UTC, through pyarrow.
 
 ### 7.3 Spark
 
@@ -608,6 +614,7 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | D-23 | An expert review workflow in the core | A demo only if on schedule | Gold data built with domain experts is how agent quality gets measured in production, so the workflow belongs in the core |
 | D-24 | A short eighth milestone for the additions | Absorbing them with zero buffer, or shrinking the Spark job | A solo plan with no buffer tends to force hurried cuts later, and the Spark job stays at full scale |
 | D-25 | The data lake exploration agent stays a stretch goal | Moving it into the core | The time goes to memory, orchestration and expert review instead. SQL and Athena are still exercised by the tools and the storage backend |
+| D-26 | The DuckDB cutoff is views, a directory lock and a read only guard | Materializing filtered tables per session, locking all file access | Materializing needs too much memory at the `scale` size, and locking all file access also blocks the views, which read files at query time |
 
 ## 18. Open questions
 
