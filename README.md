@@ -4,14 +4,13 @@
 
 **AI agents that work out why a cable network broke, propose the fix, and prove it worked. All of it is tested against a simulated network where I know the right answer.**
 
-![Status](https://img.shields.io/badge/status-week%201%20build-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB)
 ![LangGraph](https://img.shields.io/badge/agents-LangGraph-1C3C3C)
 ![MCP](https://img.shields.io/badge/tools-MCP-6B4FBB)
 ![LangSmith](https://img.shields.io/badge/tracing-LangSmith-F2A93B)
 ![AWS](https://img.shields.io/badge/data-S3%20%7C%20Athena%20%7C%20Spark-FF9900)
 
-[The problem](#the-problem) · [Why it's hard](#why-its-harder-than-it-looks) · [What I'm building](#what-im-building) · [The agents](#inside-the-agents) · [Proving it works](#proving-it-works) · [Progress](#progress) · [Full design](docs/proposal-v2.md)
+[The problem](#the-problem) · [Why it's hard](#why-its-harder-than-it-looks) · [What I'm building](#what-im-building) · [The agents](#inside-the-agents) · [Proving it works](#proving-it-works) · [Milestones](#milestones) · [Full design](docs/proposal-v2.md)
 
 </div>
 
@@ -224,22 +223,19 @@ Some scenarios combine two of these at once. The novel fault types are left off 
 
 The full reasoning, including everything I chose to leave out, is in [the design doc](docs/proposal-v2.md).
 
-## Progress
+## Milestones
 
-I'm building this in seven weekly milestones, and this section gets updated at the end of each week.
+I'm building this in seven milestones.
 
-| Week | Milestone | Done when | Status |
-|---|---|---|---|
-| 0 | Requirements, domain model, evaluation design | [Design doc](docs/proposal-v2.md) published | Done |
-| 1 | Simulator core, amplifier failures, DuckDB storage, rules baseline | One command runs a scenario end to end and prints a score | In progress |
-| 2 | Investigation agent with LangSmith tracing, holdout sealed | Agent and both baselines scored on the dev set | |
-| 3 | MCP server, all faults and decoys, incident grouping, messy data | First holdout numbers | |
-| 4 | Recommendation agent and the full approve, apply, verify loop | Closed loop recovery rate reported | |
-| 5 | Docker and a CI gate on GitHub Actions | CI blocks a deliberately broken prompt | |
-| 6 | Athena backend, Spark at scale, final holdout and novel runs | Final results with confidence intervals | |
-| 7 | Evaluation report, failure analysis, demo video | Ready to share | |
-
-Results will go here as soon as there's something real to show, with all three systems side by side.
+| # | Milestone | Done when |
+|---|---|---|
+| 1 | Simulator core, amplifier failures, DuckDB storage, rules baseline | One command runs a scenario end to end and prints a score |
+| 2 | Investigation agent with LangSmith tracing, holdout sealed | Agent and both baselines scored on the dev set |
+| 3 | MCP server, all faults and decoys, incident grouping, messy data | First holdout numbers |
+| 4 | Recommendation agent and the full approve, apply, verify loop | Closed loop recovery rate reported |
+| 5 | Docker and a CI gate on GitHub Actions | CI blocks a deliberately broken prompt |
+| 6 | Athena backend, Spark at scale, final holdout and novel runs | Final results with confidence intervals |
+| 7 | Evaluation report, failure analysis, demo video | Ready to share |
 
 ## Tech stack
 
