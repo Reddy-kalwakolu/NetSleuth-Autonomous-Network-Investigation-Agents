@@ -219,7 +219,7 @@ Some scenarios combine two of these at once. The novel fault types are left off 
 | Data access | Everything goes through MCP | It's how agents plug into live data in production, and other agents can reuse the tools. |
 | Storage | DuckDB locally, Athena in the cloud | Same Parquet files behind one interface. The agents can't tell which backend they're on. |
 | Scale | A Spark job over a large simulated run | Hundreds of millions of modem rows rolled up into the tables the agents query. |
-| Model provider | Anthropic API first, Bedrock second, both through LangChain chat models | Fast to start, and switching providers is a config change. |
+| Model provider | An OpenAI GPT model as the main model, with Anthropic and AWS Bedrock as switchable backends, all through LangChain chat models | The agent stays model agnostic, switching is a config change, and the final runs name the one model they used. |
 
 The full reasoning, with everything I chose to leave out and a log of every major decision and the alternatives I considered, is in [the design doc](docs/design.md).
 
@@ -274,7 +274,7 @@ Every tool here has one job. This is where each one shows up as a single outage 
 | | PySpark | Rolls about 430 million modem readings from a month long run into hourly summaries per node |
 | **3. Hand it over** | MCP SDK, langchain-mcp-adapters | Read only investigation tools. stdio on my machine, Streamable HTTP between containers |
 | **4. Investigate** | LangGraph | The investigation graph: code steps for lookups, LLM steps for judgment, and hard caps on every loop |
-| | LangChain chat models | Claude through the Anthropic API or AWS Bedrock, switched in config, with typed structured output |
+| | LangChain chat models | GPT through the OpenAI API as the main model, Claude through Anthropic or AWS Bedrock in reserve, switched in config, with typed structured output |
 | | Pydantic | Typed state, reports and proposed actions, validated at every step |
 | **5. Ask a person** | FastAPI, SQLite checkpointer | The graph pauses before any fix, survives a restart, and resumes when someone approves over REST |
 | **6. Prove it** | LangSmith | Traces every run, holds the evaluation datasets, and runs the expert review queue |

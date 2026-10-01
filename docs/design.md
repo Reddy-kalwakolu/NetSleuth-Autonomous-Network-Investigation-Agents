@@ -357,7 +357,7 @@ Every agent is a LangGraph graph with typed Pydantic state, versioned prompts in
 
 ### 10.1 Model layer
 
-Models come through LangChain chat models, chosen by config: `ChatAnthropic` first, and `ChatBedrockConverse` as the AWS native second backend. Typed outputs use `with_structured_output` with Pydantic schemas. Prompt caching is on where it helps. Switching providers is a config change, not a code change.
+Models come through LangChain chat models, chosen by config. The main model is an OpenAI GPT model through `ChatOpenAI`, and `ChatAnthropic` and `ChatBedrockConverse` (the AWS native path) stay configured as backends I can switch to. Typed outputs use `with_structured_output` with Pydantic schemas, and prompt caching is used where the provider supports it. Switching providers is a config change, not a code change. Whichever model runs the final holdout and novel sets is fixed for those runs and named in the evaluation report, because scores from different models are not comparable.
 
 ### 10.2 Investigation agent
 
@@ -513,7 +513,7 @@ Business metrics are derived from evaluation results, labeled as simulated: truc
 | Layer | Choice |
 |---|---|
 | Language | Python 3.12 or later, Pydantic, pydantic-settings |
-| Agents | LangGraph with a SQLite checkpointer, LangChain chat models, LangSmith |
+| Agents | LangGraph with a SQLite checkpointer, LangChain chat models (OpenAI main, Anthropic and Bedrock switchable), LangSmith |
 | Tools | MCP Python SDK, langchain-mcp-adapters |
 | Service | FastAPI |
 | Simulator | numpy, polars |
@@ -626,7 +626,7 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | D-18 | Readable plant IDs, random modem IDs | Sequential IDs everywhere | Plant IDs stay readable for people. Random modem IDs don't leak location, which keeps inventory drift meaningful |
 | D-19 | Line card as a service group attribute | A separate line card device | The grouper only needs shared card membership, and the tree stays simpler |
 | D-20 | uv with a lock file | pip ranges, pip-tools | Identical installs everywhere, which reproducibility depends on, and fast CI |
-| D-21 | Anthropic API first, Bedrock second | Bedrock only | Quicker to start. Bedrock keeps an AWS native path open behind the same interface |
+| D-21 | Anthropic API first, Bedrock second (superseded by D-32) | Bedrock only | Quicker to start. Bedrock keeps an AWS native path open behind the same interface |
 | D-22 | A thin conversational agent in the core | Leaving it as a stretch goal | It exercises conversation memory and orchestration across agents, for about 6 hours |
 | D-23 | An expert review workflow in the core | A demo only if on schedule | Gold data built with domain experts is how agent quality gets measured in production, so the workflow belongs in the core |
 | D-24 | A short eighth milestone for the additions | Absorbing them with zero buffer, or shrinking the Spark job | A solo plan with no buffer tends to force hurried cuts later, and the Spark job stays at full scale |
@@ -637,6 +637,7 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | D-29 | Route faults are graded by route: 1.0 for the route, 0.5 for a node on it | Tree distance | A fiber route has no place in the network tree |
 | D-30 | The `dev` network keeps two nodes per service group | One node per service group, as the `eval` network has | Two nodes make upstream noise ambiguous between neighbours, as it is in real plants. Regenerating `dev` would also change every scenario's device IDs |
 | D-31 | Counts and events draw from their own random stream | One stream for everything | How many random numbers a Poisson draw uses depends on its rate, so one stream would let a fault shift the noise on every unrelated level after it |
+| D-32 | An OpenAI GPT model is the main model, with Anthropic and Bedrock kept as switchable backends | Anthropic first as in D-21, or one provider only | I already have OpenAI API credits, which keeps LLM spend near zero and leaves the monthly budget for AWS. The agent stays model agnostic behind LangChain chat models, and Bedrock keeps the AWS native path |
 
 ## 18. Open questions
 
