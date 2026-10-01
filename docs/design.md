@@ -438,7 +438,7 @@ The target is at least 60 cases by week 3, growing toward 100. The holdout and n
 
 ### 12.2 Baselines
 
-* **Rules engine:** plain decision logic over the same tools, built to be strong and frozen after the first holdout run.
+* **Rules engine:** plain decision logic over the same data, built to be strong and frozen after the first holdout run. For outages it applies the rule field engineers use: find the highest device whose entire downstream is dark, starting from the lowest common ancestor of the offline modems. It has one known blind spot. If an amplifier has no taps of its own and feeds only one other amplifier, a failure of the second looks exactly like a failure of the first, and the rules blame the first. That pattern shows up in about one amplifier in 65, in roughly one network in seven.
 * **Single prompt:** one LLM call with the same prefetched context and no graph.
 
 Every results table shows the agent next to both.
@@ -451,7 +451,7 @@ Before the first holdout run, I record my expectations: rules should match or be
 
 * Incident grouping: pairwise precision and recall
 * Root cause category accuracy, per incident
-* Localization: exact match at the graded level, with partial credit by tree distance
+* Localization: exact match at the graded level, with credit falling by 0.25 per hop in the tree, so one hop off earns 0.75 and four or more hops earn nothing
 * The same metrics given the true incident groups, to separate grouping errors from agent errors
 * Decoy suppression
 * Abstention on novel faults, and unnecessary abstention on known ones
@@ -530,7 +530,8 @@ netsleuth/
   agents/             graphs, versioned prompts
   api/                FastAPI agent service
   baselines/          rules and single prompt
-eval/                 harness, metrics, calibration, judge, reports
+  eval/               harness, cases, metrics, calibration, judge
+eval/reports/         saved evaluation reports
 scenarios/            dev, regression, holdout, novel
 ground_truth/         generated, harness only
 spark_jobs/  docker/  tests/  .github/workflows/
@@ -619,6 +620,7 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | D-24 | A short eighth milestone for the additions | Absorbing them with zero buffer, or shrinking the Spark job | A solo plan with no buffer tends to force hurried cuts later, and the Spark job stays at full scale |
 | D-25 | The data lake exploration agent stays a stretch goal | Moving it into the core | The time goes to memory, orchestration and expert review instead. SQL and Athena are still exercised by the tools and the storage backend |
 | D-26 | The DuckDB cutoff is views, a directory lock and a read only guard | Materializing filtered tables per session, locking all file access | Materializing needs too much memory at the `scale` size, and locking all file access also blocks the views, which read files at query time |
+| D-27 | The harness lives in `netsleuth/eval`, reports in `eval/reports` | A top level `eval` package | A package named `eval` shadows Python's built in `eval` |
 
 ## 18. Open questions
 
