@@ -7,11 +7,12 @@ Reachability only changes when a device's status changes, so it is recomputed th
 every tick. That keeps month long runs at the ``scale`` size fast.
 
 Power (utility outages, batteries) arrives with the power primitives, and forking arrives with the
-closed loop. Neither is here yet.
+closed loop.
 """
 
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import numpy as np
@@ -19,15 +20,35 @@ import numpy as np
 from netsleuth.sandbox.engine.faults import Fault
 from netsleuth.sandbox.engine.primitives import (
     HEALTHY,
+    AddUpstreamNoise,
+    AnyEffect,
+    CutFiberRoute,
     DegradeLevels,
     DeviceState,
     EngineError,
+    MaintenanceWindow,
+    Restore,
     TakeDown,
     effect_targets,
 )
-from netsleuth.sandbox.topology import Topology
+from netsleuth.sandbox.topology import Node, ServiceGroup, Topology
 
 DEFAULT_START = datetime(2026, 9, 1, tzinfo=UTC)
+
+
+@dataclass(frozen=True)
+class CalendarEntry:
+    window_id: str
+    scope_id: str
+    start_tick: int
+    end_tick: int
+    published_tick: int
+
+
+def _hour_in_window(hour: float, start_hour: int, end_hour: int) -> bool:
+    if start_hour < end_hour:
+        return start_hour <= hour < end_hour
+    return hour >= start_hour or hour < end_hour  # wraps midnight
 
 
 class Engine:
@@ -53,13 +74,17 @@ class Engine:
         self._states: dict[str, DeviceState] = {}
         self._offsets: dict[str, tuple[float, float]] = {}
         self._unreachable: frozenset[str] = frozenset()
-        self._schedule: dict[int, list[TakeDown | DegradeLevels]] = defaultdict(list)
+        self._schedule: dict[int, list[AnyEffect]] = defaultdict(list)
+        self._cut_routes: set[str] = set()
+        self._noise: dict[str, list[AddUpstreamNoise]] = defaultdict(list)
+        self._calendar: list[CalendarEntry] = []
+        self._nodes_on_route: dict[str, list[str]] = defaultdict(list)
+        for node in topology.of_type(Node):
+            self._nodes_on_route[node.fiber_route].append(node.device_id)
 
         for fault in self.faults:
             for scheduled in fault.effects:
-                for target in effect_targets(scheduled.effect):
-                    if target not in topology:
-                        raise EngineError(f"{fault.fault_id} targets unknown device {target}")
+                self._validate(fault.fault_id, scheduled.effect)
                 self._schedule[scheduled.at_tick].append(scheduled.effect)
 
         self._apply_current_tick()
@@ -82,6 +107,20 @@ class Engine:
     # ---------- queries ----------
 
     @property
+    def calendar(self) -> tuple[CalendarEntry, ...]:
+        return tuple(self._calendar)
+
+    def us_noise_db(self, service_group_id: str) -> float:
+        """Upstream SNR lost to ingress on a service group at the current tick."""
+        now = self.time_of(self.tick)
+        hour = now.hour + now.minute / 60
+        return sum(
+            n.snr_drop_db
+            for n in self._noise.get(service_group_id, [])
+            if _hour_in_window(hour, n.start_hour, n.end_hour)
+        )
+
+    @property
     def unreachable(self) -> frozenset[str]:
         return self._unreachable
 
@@ -99,6 +138,20 @@ class Engine:
 
     # ---------- applying effects ----------
 
+    def _validate(self, fault_id: str, effect: AnyEffect) -> None:
+        for target in effect_targets(effect):
+            if target not in self.topology:
+                raise EngineError(f"{fault_id} targets unknown device {target}")
+        match effect:
+            case CutFiberRoute(route=route) if route not in self._nodes_on_route:
+                raise EngineError(f"{fault_id} cuts unknown fiber route {route}")
+            case AddUpstreamNoise(service_group_id=sg_id) if not isinstance(
+                self.topology[sg_id], ServiceGroup
+            ):
+                raise EngineError(f"{fault_id}: upstream noise needs a service group, not {sg_id}")
+            case _:
+                pass
+
     def _apply_current_tick(self) -> None:
         status_changed = False
         effects = self._schedule.pop(self.tick, [])
@@ -109,7 +162,7 @@ class Engine:
         if status_changed:
             self._recompute_reachability()
 
-    def _apply(self, effect: TakeDown | DegradeLevels) -> bool:
+    def _apply(self, effect: AnyEffect) -> bool:
         """Apply one effect. Returns whether any device status changed."""
         match effect:
             case TakeDown(device_id=device_id):
@@ -124,11 +177,33 @@ class Engine:
                     )
                     return True
                 return False
+            case Restore(device_id=device_id):
+                self._states.pop(device_id, None)
+                return True
+            case CutFiberRoute(route=route):
+                self._cut_routes.add(route)
+                return True
+            case AddUpstreamNoise():
+                self._noise[effect.service_group_id].append(effect)
+                return False
+            case MaintenanceWindow():
+                self._calendar.append(
+                    CalendarEntry(
+                        window_id=effect.window_id,
+                        scope_id=effect.scope_id,
+                        start_tick=effect.start_tick,
+                        end_tick=effect.end_tick,
+                        published_tick=self.tick,
+                    )
+                )
+                return False
 
     def _recompute_reachability(self) -> None:
+        roots = [d for d, state in self._states.items() if state.status == "down"]
+        roots += [n for route in self._cut_routes for n in self._nodes_on_route[route]]
         cut: set[str] = set()
-        for device_id, state in self._states.items():
-            if state.status == "down" and device_id not in cut:
+        for device_id in roots:
+            if device_id not in cut:
                 cut.add(device_id)
                 cut.update(d.device_id for d in self.topology.subtree(device_id))
         self._unreachable = frozenset(cut)

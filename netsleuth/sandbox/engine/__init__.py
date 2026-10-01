@@ -1,6 +1,6 @@
 """The NetSandbox state engine: ticks, device state, reachability, faults and ground truth."""
 
-from netsleuth.sandbox.engine.engine import DEFAULT_START, Engine
+from netsleuth.sandbox.engine.engine import DEFAULT_START, CalendarEntry, Engine
 from netsleuth.sandbox.engine.faults import (
     CorrectAction,
     Fault,
@@ -10,18 +10,27 @@ from netsleuth.sandbox.engine.faults import (
 )
 from netsleuth.sandbox.engine.ground_truth import write_ground_truth
 from netsleuth.sandbox.engine.primitives import (
+    AddUpstreamNoise,
+    AnyEffect,
+    CutFiberRoute,
     DegradeLevels,
     DeviceState,
     DeviceStatus,
     Effect,
     EngineError,
+    MaintenanceWindow,
+    Restore,
     ScheduledEffect,
     TakeDown,
 )
 
 __all__ = [
     "DEFAULT_START",
+    "AddUpstreamNoise",
+    "AnyEffect",
+    "CalendarEntry",
     "CorrectAction",
+    "CutFiberRoute",
     "DegradeLevels",
     "DeviceState",
     "DeviceStatus",
@@ -30,6 +39,8 @@ __all__ = [
     "EngineError",
     "Fault",
     "GradedLevel",
+    "MaintenanceWindow",
+    "Restore",
     "RootCauseCategory",
     "ScheduledEffect",
     "TakeDown",

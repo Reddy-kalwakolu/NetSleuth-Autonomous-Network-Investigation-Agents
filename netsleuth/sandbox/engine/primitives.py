@@ -7,7 +7,7 @@ only thing that applies them.
 from dataclasses import dataclass
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveFloat, model_validator
 
 DeviceStatus = Literal["healthy", "degraded", "down"]
 
@@ -49,7 +49,54 @@ class DegradeLevels(_Primitive):
     us_db: float
 
 
-Effect = Annotated[TakeDown | DegradeLevels, Field(discriminator="kind")]
+class Restore(_Primitive):
+    """The device comes back up. Everything behind it becomes reachable again."""
+
+    kind: Literal["restore"] = "restore"
+    device_id: str
+
+
+class CutFiberRoute(_Primitive):
+    """Every node on the route loses its fiber link. The nodes themselves are fine."""
+
+    kind: Literal["cut_fiber_route"] = "cut_fiber_route"
+    route: str
+
+
+class AddUpstreamNoise(_Primitive):
+    """Ingress on a service group's upstream, active every day between two local hours.
+
+    ``end_hour`` is exclusive, and a window with ``start_hour > end_hour`` wraps midnight.
+    """
+
+    kind: Literal["add_us_noise"] = "add_us_noise"
+    service_group_id: str
+    snr_drop_db: PositiveFloat
+    start_hour: int = Field(ge=0, le=23)
+    end_hour: int = Field(ge=0, le=24)
+
+
+class MaintenanceWindow(_Primitive):
+    """Publishes a planned work window to the maintenance calendar. The work itself is
+    scheduled separately, as ``take_down`` and ``restore``."""
+
+    kind: Literal["maintenance_window"] = "maintenance_window"
+    window_id: str
+    scope_id: str
+    start_tick: NonNegativeInt
+    end_tick: NonNegativeInt
+
+    @model_validator(mode="after")
+    def _ends_after_start(self) -> "MaintenanceWindow":
+        if self.end_tick <= self.start_tick:
+            raise ValueError("a maintenance window must end after it starts")
+        return self
+
+
+AnyEffect = (
+    TakeDown | DegradeLevels | Restore | CutFiberRoute | AddUpstreamNoise | MaintenanceWindow
+)
+Effect = Annotated[AnyEffect, Field(discriminator="kind")]
 
 
 class ScheduledEffect(BaseModel):
@@ -59,9 +106,14 @@ class ScheduledEffect(BaseModel):
     effect: Effect
 
 
-def effect_targets(effect: TakeDown | DegradeLevels) -> tuple[str, ...]:
+def effect_targets(effect: AnyEffect) -> tuple[str, ...]:
+    """Device IDs the effect names. Fiber routes aren't devices and are checked separately."""
     match effect:
-        case TakeDown(device_id=device_id):
+        case TakeDown(device_id=device_id) | Restore(device_id=device_id):
             return (device_id,)
-        case DegradeLevels(scope_id=scope_id):
+        case DegradeLevels(scope_id=scope_id) | MaintenanceWindow(scope_id=scope_id):
             return (scope_id,)
+        case AddUpstreamNoise(service_group_id=service_group_id):
+            return (service_group_id,)
+        case CutFiberRoute():
+            return ()
