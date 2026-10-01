@@ -7,7 +7,8 @@ import pytest
 
 from netsleuth.baselines import rules_baseline
 from netsleuth.diagnosis import Diagnosis
-from netsleuth.eval import AmplifierFailureSpec, Case, format_scores, run_case
+from netsleuth.eval import AmplifierFailureSpec, Case, CustomFaultSpec, format_scores, run_case
+from netsleuth.sandbox.engine import CorrectAction, DegradeLevels, ScheduledEffect
 from netsleuth.sandbox.topology import Amplifier, Tap, Topology, generate_topology
 from netsleuth.storage import StorageSession
 
@@ -52,12 +53,27 @@ def test_single_failure_is_detected_and_scored(topo: Topology, tmp_path: Path) -
 
 
 def test_a_missed_fault_scores_zero(topo: Topology, tmp_path: Path) -> None:
-    # A partial failure takes nothing offline, so the week 1 detector can't see it.
     amp = clear_amp(topo)
+    # A 2 dB sag is below every detector's threshold.
     case = Case(
-        case_id="f1-partial",
+        case_id="too-small",
         ticks=30,
-        faults=[AmplifierFailureSpec(amp_id=amp.device_id, at_tick=10, partial=True)],
+        faults=[
+            CustomFaultSpec(
+                category="amplifier_failure",
+                root_device_id=amp.device_id,
+                graded_level="amplifier",
+                correct_action=CorrectAction(
+                    action="dispatch_tech", target=amp.device_id, params={"work_type": "amp_repair"}
+                ),
+                effects=(
+                    ScheduledEffect(
+                        at_tick=10,
+                        effect=DegradeLevels(scope_id=amp.device_id, ds_db=-2.0, us_db=1.0),
+                    ),
+                ),
+            )
+        ],
     )
 
     (score,) = run_case(case, rules_baseline, *folders(tmp_path)).faults

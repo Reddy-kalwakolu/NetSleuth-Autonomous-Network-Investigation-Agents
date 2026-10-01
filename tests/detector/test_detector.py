@@ -120,12 +120,14 @@ def test_two_failures_on_two_nodes_give_two_anomalies(topo: Topology, tmp_path: 
 
 
 def test_partial_failure_is_not_an_outage(topo: Topology, tmp_path: Path) -> None:
-    # Nothing goes offline in a partial failure. Catching it needs RF signals, which come later.
+    # Nothing goes offline in a partial failure, so share offline stays quiet. The RF signal
+    # catches it instead.
     _, amp = smallest_and_largest_amps(topo)
     f1 = amplifier_failure(topo, amp.device_id, at_tick=FAULT_TICK, incident_id="i", partial=True)
     engine = simulate(topo, [f1], tmp_path, "run")
 
-    assert detect(tmp_path, "run", engine.time_of(TICKS - 1)).height == 0
+    found = detect(tmp_path, "run", engine.time_of(TICKS - 1))
+    assert set(found["signal"]) == {"rf_level_drop"}
 
 
 # ---------- output shape ----------
