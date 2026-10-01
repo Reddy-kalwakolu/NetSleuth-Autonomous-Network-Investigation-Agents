@@ -223,6 +223,28 @@ Some scenarios combine two of these at once. The novel fault types are left off 
 
 The full reasoning, with everything I chose to leave out and a log of every major decision and the alternatives I considered, is in [the design doc](docs/design.md).
 
+## Try it
+
+You need Python 3.12 or later and [uv](https://docs.astral.sh/uv/).
+
+```bash
+git clone https://github.com/Reddy-kalwakolu/NetSleuth-Autonomous-Network-Investigation-Agents.git
+cd NetSleuth-Autonomous-Network-Investigation-Agents
+uv sync
+uv run netsleuth run scenarios/dev/f1_*.yaml
+```
+
+Each scenario simulates the network, injects its faults, detects anomalies, diagnoses each one with the rules baseline, and prints a score against the hidden answer:
+
+```text
+case f1-blind-spot  [rules]
+  amplifier_failure @ amp-hub1-node04-a14  predicted amplifier_failure @ amp-hub1-node04-a13  category 1.00  location 0.75
+case f1-partial  [rules]
+  amplifier_failure @ amp-hub1-node04-a1  not detected  category 0.00  location 0.00
+```
+
+Scenario files live in [`scenarios/dev`](scenarios/dev), and each one says what it tests. Run the tests with `uv run pytest`.
+
 ## Milestones
 
 I'm building this in eight milestones.

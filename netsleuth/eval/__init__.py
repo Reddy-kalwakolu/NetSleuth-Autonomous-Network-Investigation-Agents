@@ -3,16 +3,19 @@
 from netsleuth.eval.cases import AmplifierFailureSpec, Case, SimulatedRun, simulate_case
 from netsleuth.eval.harness import CaseResult, FaultScore, System, format_scores, run_case
 from netsleuth.eval.metrics import category_score, location_score, tree_distance
+from netsleuth.eval.scenarios import ScenarioError, load_case
 
 __all__ = [
     "AmplifierFailureSpec",
     "Case",
     "CaseResult",
     "FaultScore",
+    "ScenarioError",
     "SimulatedRun",
     "System",
     "category_score",
     "format_scores",
+    "load_case",
     "location_score",
     "run_case",
     "simulate_case",

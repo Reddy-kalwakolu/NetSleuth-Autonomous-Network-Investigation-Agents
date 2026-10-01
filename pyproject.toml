@@ -20,6 +20,9 @@ dependencies = [
     "pyarrow>=15",
 ]
 
+[project.scripts]
+netsleuth = "netsleuth.cli:entry"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

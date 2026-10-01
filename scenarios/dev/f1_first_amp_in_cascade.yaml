@@ -1,0 +1,10 @@
+# The first amplifier after node 04 fails completely. It feeds 166 modems, the biggest outage an
+# amplifier can cause in this network, and the rules should pin it down exactly.
+case_id: f1-first-amp-in-cascade
+topology_seed: 0
+seed: 1
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node04-a1
+    at_tick: 20

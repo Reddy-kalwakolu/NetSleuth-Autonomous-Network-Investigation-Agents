@@ -17,6 +17,10 @@ def topo() -> Topology:
     return generate_topology("dev", seed=0)
 
 
+def folders(tmp_path: Path) -> tuple[Path, Path]:
+    return tmp_path / "data", tmp_path / "ground_truth"
+
+
 def clear_amp(topo: Topology) -> Amplifier:
     """An amplifier with its own taps, so the rules can pin it down exactly."""
     return next(
@@ -32,7 +36,7 @@ def test_single_failure_is_detected_and_scored(topo: Topology, tmp_path: Path) -
         case_id="f1-one", ticks=30, faults=[AmplifierFailureSpec(amp_id=amp.device_id, at_tick=10)]
     )
 
-    result = run_case(case, rules_baseline, tmp_path)
+    result = run_case(case, rules_baseline, *folders(tmp_path))
 
     assert result.case_id == "f1-one"
     assert result.system == "rules"
@@ -56,7 +60,7 @@ def test_a_missed_fault_scores_zero(topo: Topology, tmp_path: Path) -> None:
         faults=[AmplifierFailureSpec(amp_id=amp.device_id, at_tick=10, partial=True)],
     )
 
-    (score,) = run_case(case, rules_baseline, tmp_path).faults
+    (score,) = run_case(case, rules_baseline, *folders(tmp_path)).faults
 
     assert not score.detected
     assert score.predicted_category is None
@@ -65,7 +69,9 @@ def test_a_missed_fault_scores_zero(topo: Topology, tmp_path: Path) -> None:
 
 
 def test_healthy_case_has_nothing_to_score(tmp_path: Path) -> None:
-    result = run_case(Case(case_id="healthy", ticks=20, faults=[]), rules_baseline, tmp_path)
+    result = run_case(
+        Case(case_id="healthy", ticks=20, faults=[]), rules_baseline, *folders(tmp_path)
+    )
 
     assert result.faults == ()
     assert result.false_alarms == 0
@@ -77,7 +83,7 @@ def test_ground_truth_is_written_outside_the_data_folder(topo: Topology, tmp_pat
         case_id="gt", ticks=20, faults=[AmplifierFailureSpec(amp_id=amp.device_id, at_tick=5)]
     )
 
-    run_case(case, rules_baseline, tmp_path)
+    run_case(case, rules_baseline, *folders(tmp_path))
 
     (gt_file,) = (tmp_path / "ground_truth").glob("*.json")
     assert (
@@ -97,9 +103,9 @@ def test_scores_print_for_each_case(topo: Topology, tmp_path: Path) -> None:
                 faults=[AmplifierFailureSpec(amp_id=amp.device_id, at_tick=5)],
             ),
             rules_baseline,
-            tmp_path,
+            *folders(tmp_path),
         ),
-        run_case(Case(case_id="second", ticks=20, faults=[]), rules_baseline, tmp_path),
+        run_case(Case(case_id="second", ticks=20, faults=[]), rules_baseline, *folders(tmp_path)),
     ]
 
     text = format_scores(results)
@@ -122,7 +128,7 @@ def test_systems_only_see_data_up_to_the_detection_time(topo: Topology, tmp_path
         seen.append((session.as_of, anomaly["ts"], latest))
         return rules_baseline(session, anomaly)
 
-    run_case(case, spy, tmp_path, system_name="spy")
+    run_case(case, spy, *folders(tmp_path), system_name="spy")
 
     ((as_of, detected_at, latest),) = seen
     assert as_of == detected_at == latest
@@ -146,7 +152,7 @@ def test_a_one_hop_miss_earns_partial_location_credit(tmp_path: Path) -> None:
         faults=[AmplifierFailureSpec(amp_id=failed.device_id, at_tick=10)],
     )
 
-    (score,) = run_case(case, rules_baseline, tmp_path).faults
+    (score,) = run_case(case, rules_baseline, *folders(tmp_path)).faults
 
     assert score.predicted_device_id == upstream.device_id
     assert score.category_score == 1.0

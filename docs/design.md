@@ -232,6 +232,8 @@ One tick is 5 minutes. Each device carries a status (healthy, degraded with a se
 
 A fault is a named bundle of primitives plus its ground truth: category, root device, the level it is graded at, incident ID and correct action. Because faults are built from primitives, someone else can write sealed scenarios without touching Python.
 
+**Scenario files** are YAML: a case ID, the network size and seeds, the run length, and the faults to inject. Today they name faults by kind (`amplifier_failure`, with the amplifier, the start tick and whether it is partial), and every scenario is checked when it loads, so a typo or a device that isn't an amplifier fails before the run starts. Writing faults directly as lists of primitives joins them in milestone 2, before the sealed scenarios are written. `netsleuth run` runs any set of scenario files end to end and prints their scores.
+
 **Actions** the engine accepts: `dispatch_tech(target, work_type)`, `dispatch_generator(power_supply)`, `rollback_change(change_id)`, `change_modulation_profile(service_group, profile)`, `reset_modems(scope)`, `route_to_team(team)`, `open_capacity_ticket(node)`, `monitor` and `no_action`. The right action fixes the fault after a realistic delay. A wrong one does nothing, or helps only for a while.
 
 **Forking** copies the full state and the random generator, so a branch is exactly reproducible.

@@ -1,0 +1,13 @@
+# Two unrelated amplifier failures on two nodes, 100 minutes apart. Each should become its own
+# anomaly on the right node, with no cross talk between them.
+case_id: f1-two-nodes
+topology_seed: 0
+seed: 3
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node01-a5
+    at_tick: 10
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node04-a1
+    at_tick: 30

@@ -45,10 +45,12 @@ class CaseResult:
 
 
 def run_case(
-    case: Case, system: System, work_dir: Path, system_name: str | None = None
+    case: Case,
+    system: System,
+    data_dir: Path,
+    ground_truth_dir: Path,
+    system_name: str | None = None,
 ) -> CaseResult:
-    data_dir = work_dir / "data"
-    ground_truth_dir = work_dir / "ground_truth"
     sim = simulate_case(case, data_dir, ground_truth_dir)
     storage = DuckDBStorage(data_dir)
 
@@ -113,12 +115,12 @@ def format_scores(results: Sequence[CaseResult]) -> str:
             lines.append("  no faults injected")
         for s in result.faults:
             predicted = (
-                f"{s.predicted_category} @ {s.predicted_device_id}"
+                f"predicted {s.predicted_category} @ {s.predicted_device_id}"
                 if s.detected
                 else "not detected"
             )
             lines.append(
-                f"  {s.true_category} @ {s.true_device_id}  predicted {predicted}  "
+                f"  {s.true_category} @ {s.true_device_id}  {predicted}  "
                 f"category {s.category_score:.2f}  location {s.location_score:.2f}"
             )
         lines.append(f"  false alarms {result.false_alarms}")

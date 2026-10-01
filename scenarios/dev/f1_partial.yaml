@@ -1,0 +1,12 @@
+# The first amplifier on node 04 degrades instead of dying: downstream power drops 8 dB and modems
+# push 6 dB harder upstream, but nothing goes offline. The week 1 detector only watches outages, so
+# I expect this one to be missed until RF based detection arrives.
+case_id: f1-partial
+topology_seed: 0
+seed: 4
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node04-a1
+    at_tick: 20
+    partial: true

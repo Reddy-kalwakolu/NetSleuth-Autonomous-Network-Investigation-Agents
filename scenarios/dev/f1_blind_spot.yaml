@@ -1,0 +1,11 @@
+# Topology seed 7 has an amplifier (node 04, a13) with no taps of its own that feeds only a14. When
+# a14 fails, the modem data looks exactly like a13 failing, so I expect the rules to land one hop
+# off and earn 0.75 location credit.
+case_id: f1-blind-spot
+topology_seed: 7
+seed: 5
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node04-a14
+    at_tick: 20

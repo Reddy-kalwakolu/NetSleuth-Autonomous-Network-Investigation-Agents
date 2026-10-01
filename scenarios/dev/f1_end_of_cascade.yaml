@@ -1,0 +1,10 @@
+# The fifth amplifier in a cascade on node 01 fails (N+5). Only 10 modems sit behind it, about 4% of
+# the node, so this checks the detector still sees a small outage.
+case_id: f1-end-of-cascade
+topology_seed: 0
+seed: 2
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node01-a5
+    at_tick: 20
