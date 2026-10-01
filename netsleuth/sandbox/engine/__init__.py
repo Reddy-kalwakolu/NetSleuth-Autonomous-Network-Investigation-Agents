@@ -7,6 +7,9 @@ from netsleuth.sandbox.engine.faults import (
     GradedLevel,
     RootCauseCategory,
     amplifier_failure,
+    fiber_cut,
+    ingress_noise,
+    planned_maintenance,
 )
 from netsleuth.sandbox.engine.ground_truth import write_ground_truth
 from netsleuth.sandbox.engine.primitives import (
@@ -45,5 +48,8 @@ __all__ = [
     "ScheduledEffect",
     "TakeDown",
     "amplifier_failure",
+    "fiber_cut",
+    "ingress_noise",
+    "planned_maintenance",
     "write_ground_truth",
 ]
