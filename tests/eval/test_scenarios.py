@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from netsleuth.eval import ScenarioError, load_case
+from netsleuth.eval import AmplifierFailureSpec, ScenarioError, load_case
 
 REPO = Path(__file__).resolve().parents[2]
 DEV_SCENARIOS = sorted((REPO / "scenarios" / "dev").glob("*.yaml"))
@@ -32,6 +32,7 @@ def test_scenario_file_loads_into_a_case(tmp_path: Path) -> None:
     assert case.seed == 3
     assert case.ticks == 24
     (fault,) = case.faults
+    assert isinstance(fault, AmplifierFailureSpec)
     assert fault.amp_id == "amp-hub1-node01-a5"
     assert fault.at_tick == 10
     assert not fault.partial

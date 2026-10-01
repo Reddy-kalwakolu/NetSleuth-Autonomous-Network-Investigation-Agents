@@ -1,7 +1,7 @@
 """Scenario files: YAML versions of evaluation cases.
 
 A scenario names a network, seeds, a length and the faults to inject. Anything wrong with it
-(a typo in a key, a device that isn't an amplifier, a fault after the run ends) fails when the
+(a typo in a key, a device of the wrong kind, a fault after the run ends) fails when the
 file loads, not halfway through a run.
 """
 
@@ -10,8 +10,9 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from netsleuth.eval.cases import Case
-from netsleuth.sandbox.topology import Amplifier, generate_topology
+from netsleuth.eval.cases import Case, build_fault
+from netsleuth.sandbox.engine import Engine, EngineError
+from netsleuth.sandbox.topology import generate_topology
 
 
 class ScenarioError(ValueError):
@@ -35,15 +36,18 @@ def load_case(path: Path) -> Case:
         raise ScenarioError(f"{path}: {error}") from error
 
     topology = generate_topology(case.topology_size, seed=case.topology_seed)
-    for fault in case.faults:
-        if fault.amp_id not in topology or not isinstance(topology[fault.amp_id], Amplifier):
+    try:
+        faults = [build_fault(spec, topology, f"check-{i}") for i, spec in enumerate(case.faults)]
+        Engine(topology, faults, seed=case.seed)  # checks every effect's targets
+    except EngineError as error:
+        raise ScenarioError(
+            f"{path}: {error} (the {case.topology_size} network, topology seed "
+            f"{case.topology_seed})"
+        ) from error
+    for fault in faults:
+        if fault.start_tick >= case.ticks:
             raise ScenarioError(
-                f"{path}: {fault.amp_id} is not an amplifier in the {case.topology_size} "
-                f"network with topology seed {case.topology_seed}"
-            )
-        if fault.at_tick >= case.ticks:
-            raise ScenarioError(
-                f"{path}: the fault at tick {fault.at_tick} starts after the run ends "
+                f"{path}: the fault at tick {fault.start_tick} starts after the run ends "
                 f"at tick {case.ticks - 1}"
             )
     return case
