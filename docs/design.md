@@ -80,7 +80,7 @@ NetSandbox addresses both, and the agents are built and measured on top of it.
 * R1. Generate a seeded topology in three sizes. Fiber routes and power areas cut across the network tree.
 * R2. Step the state forward in fixed ticks. Faults are built from small effect primitives. The same scenario and seed always give the same output.
 * R3. Follow the in band rule: a device reports only if it has power and its path to the hub is up. Data measured at the CMTS is always available.
-* R4. Produce event streams: the modem event log, the CMTS flap list, alarms, tickets, the change log, the maintenance calendar and utility power events.
+* R4. Produce event streams: the modem event log, the CMTS flap list, alarms, tickets, the change log, the maintenance calendar (`maintenance`, one row per window when it is published) and utility power events.
 * R5. Add configurable messy data: dropped polls, counter resets, delayed alarms and inventory drift.
 * R6. Accept actions. The right action fixes or eases the fault. A wrong one does nothing, or helps only for a while.
 * R7. Fork the state at any tick, apply an action, run forward, and write the result under a branched run ID.
@@ -221,18 +221,19 @@ One tick is 5 minutes. Each device carries a status (healthy, degraded with a se
 | Primitive | Effect |
 |---|---|
 | `take_down(device)` | The device goes down |
+| `restore(device)` | The device comes back up, and the modems behind it reboot |
 | `degrade_levels(scope, ds_db, us_db)` | Shifts signal levels in a scope |
-| `add_us_noise(service_group, snr_drop_db, schedule)` | Upstream noise, on a schedule |
+| `add_us_noise(service_group, snr_drop_db, start_hour, end_hour)` | Upstream noise every day between two local hours. A window can wrap midnight |
 | `cut_fiber_route(route)` | Every node on the route loses its fiber link |
 | `utility_outage(power_area, duration)` | Homes and power supplies in the area lose utility power |
 | `config_change(target, effect)` | A change log entry plus its effect |
 | `counter_rate(scope, corrected, uncorrectable)` | Codeword error rates |
-| `maintenance_window(scope, start, end, effect)` | Planned work with an effect |
+| `maintenance_window(window_id, scope, start, end)` | Publishes planned work to the maintenance calendar. The work itself is a `take_down` and a `restore` |
 | `peering_load(link, profile)` | Load on a peering link |
 
 A fault is a named bundle of primitives plus its ground truth: category, root device, the level it is graded at, incident ID and correct action. Because faults are built from primitives, someone else can write sealed scenarios without touching Python.
 
-**Scenario files** are YAML: a case ID, the network size and seeds, the run length, and the faults to inject. Today they name faults by kind (`amplifier_failure`, with the amplifier, the start tick and whether it is partial), and every scenario is checked when it loads, so a typo or a device that isn't an amplifier fails before the run starts. Writing faults directly as lists of primitives joins them in milestone 2, before the sealed scenarios are written. `netsleuth run` runs any set of scenario files end to end and prints their scores.
+**Scenario files** are YAML: a case ID, the network size and seeds, the run length, and the faults to inject. A fault is one of five kinds: `amplifier_failure`, `fiber_cut` (a route or one node), `ingress_noise`, `planned_maintenance`, or `custom`, which lists primitives directly together with its answer: category, root device, graded level and correct action. `custom` is how someone else can write sealed scenarios without touching Python. Every scenario is built and checked when it loads, so a typo or a device of the wrong kind fails before the run starts. `netsleuth run` runs any set of scenario files end to end and prints their scores.
 
 **Actions** the engine accepts: `dispatch_tech(target, work_type)`, `dispatch_generator(power_supply)`, `rollback_change(change_id)`, `change_modulation_profile(service_group, profile)`, `reset_modems(scope)`, `route_to_team(team)`, `open_capacity_ticket(node)`, `monitor` and `no_action`. The right action fixes the fault after a realistic delay. A wrong one does nothing, or helps only for a while.
 
@@ -246,8 +247,8 @@ A fault is a named bundle of primitives plus its ground truth: category, root de
 |---|---|---|
 | Modem, as seen by the CMTS | yes | online state, upstream receive power, upstream MER per modem |
 | Modem, polled over the plant | no | downstream power and MER, upstream transmit power, cumulative corrected and uncorrectable codeword counters |
-| Modem event log | no | T3 and T4 timeouts |
-| Service group channels | yes | upstream SNR per channel, upstream and downstream utilization, modems online and total |
+| Modem event log (`cm_events`) | no | T3 timeouts, which climb as the service group's low channels get noisy, and T4 when a modem comes back after an outage. A modem that comes back has rebooted, so its counters restart |
+| Service group channels | yes | upstream SNR per channel (ingress hits the two lowest channels fully and the rest by a quarter), cumulative uncorrectable upstream codewords per channel, upstream and downstream utilization, modems online and total |
 | Fiber node | no | optical receive level, temperature |
 | Amplifier (the 15% that report) | no | input and output level, temperature, status |
 | Power supply transponder | no | AC input, on battery, battery voltage, runtime left |
@@ -313,9 +314,17 @@ A PySpark job rolls the `scale` run up into hourly summaries per node: share off
 
 The detector is deliberately simple, and it grows one signal at a time. Each hit becomes a row in `anomaly_events`, and its misses and false alarms are useful test material.
 
-**Share offline per node (milestone 1).** It reads the CMTS view, which is always present, and finds each modem's node from the stored inventory with a recursive query. A node is flagged when its share offline rises at least 2 points above its own median over the last hour and at least 5 modems are down. A lasting outage raises one anomaly at its onset. Because the median catches up with a standing outage, a second failure on an already dark node still raises a fresh anomaly.
+Every signal shares one onset rule: a condition raises one anomaly when it starts, not one per tick while it lasts.
 
-**Later signals.** T3 and T4 timeout rates arrive with the modem event log in milestone 2, alongside ingress noise. They travel over the plant in band, so they go quiet during a full outage and matter most for intermittent faults. RF based signals for partial failures, service group SNR and utilization, ticket volume per area, and peering utilization and latency follow with the faults that need them.
+**Share offline per node.** It reads the CMTS view, which is always present, and finds each modem's node from the stored inventory with a recursive query. A node is flagged when its share offline rises at least 2 points above its own median over the last hour and at least 5 modems are down. A lasting outage raises one anomaly at its onset. Because the median catches up with a standing outage, a second failure on an already dark node still raises a fresh anomaly.
+
+**Upstream SNR per service group.** The lowest SNR across the two low channels, against its own median over the last hour. A drop of 4 dB or more is flagged. It is measured at the CMTS, so it is always present, and it is the clearest sign of ingress.
+
+**T3 rate per node.** The share of a node's modems that logged a T3 timeout in the last hour. It is flagged at 5% or more, and at least 3 points above its own recent median. The event log travels in band, so this goes quiet during a full outage and matters most for intermittent noise. The hourly window is what catches mild ingress, where only about 2% of modems log a T3 in any one tick.
+
+**RF level drop per node.** Each modem's downstream power against the median of its own previous polls (two polls are enough, so a failure in the first hour of a run is still caught). A node is flagged when at least 5 modems and 2% of those polled fell 4 dB or more. This is how a partial amplifier failure shows up, since nothing goes offline.
+
+**Still to come.** Utilization, ticket volume per area, and peering utilization and latency follow with the faults that need them.
 
 The grouper uses fixed rules on the stored inventory. Anomalies close in time are merged when they share a fiber route, power area, CMTS line card, or a CMTS with a recent change. Each incident records its anomalies, the reason for grouping and the detection time. Because it uses the stored inventory, inventory drift can mislead it, just as it would in production.
 
@@ -440,7 +449,7 @@ The target is at least 60 cases by week 3, growing toward 100. The holdout and n
 
 ### 12.2 Baselines
 
-* **Rules engine:** plain decision logic over the same data, built to be strong and frozen after the first holdout run. For outages it applies the rule field engineers use: find the highest device whose entire downstream is dark, starting from the lowest common ancestor of the offline modems. It has one known blind spot. If an amplifier has no taps of its own and feeds only one other amplifier, a failure of the second looks exactly like a failure of the first, and the rules blame the first. That pattern shows up in about one amplifier in 65, in roughly one network in seven.
+* **Rules engine:** plain decision logic over the same data, built to be strong and frozen after the first holdout run. It checks, in this order: an active maintenance window on the node (planned maintenance); for an outage, the rule field engineers use, finding the highest device whose entire downstream is dark from the lowest common ancestor of the offline modems, and calling a route cut when another node on the same fiber route is fully dark too; for upstream noise, ingress at the node with the most modems logging T3 timeouts in the last hour; and for an RF level drop, the outage rule applied to the modems whose power fell, which pins a partial amplifier failure. It has one known blind spot. If an amplifier has no taps of its own and feeds only one other amplifier, a failure of the second looks exactly like a failure of the first, and the rules blame the first. That pattern shows up in about one amplifier in 65, in roughly one network in seven.
 * **Single prompt:** one LLM call with the same prefetched context and no graph.
 
 Every results table shows the agent next to both.
@@ -453,7 +462,8 @@ Before the first holdout run, I record my expectations: rules should match or be
 
 * Incident grouping: pairwise precision and recall
 * Root cause category accuracy, per incident
-* Localization: exact match at the graded level, with credit falling by 0.25 per hop in the tree, so one hop off earns 0.75 and four or more hops earn nothing
+* Localization: exact match at the graded level, with credit falling by 0.25 per hop in the tree, so one hop off earns 0.75 and four or more hops earn nothing. A fiber route is not in the tree, so route faults earn 1.0 for the route and 0.5 for a node on it
+* Matching faults to anomalies: until the grouper exists, a fault claims every anomaly on the nodes it sits on or spans, and on every node in their service groups, from its start until the next fault there starts. The earliest claimed anomaly is diagnosed, and claimed anomalies never count as false alarms
 * The same metrics given the true incident groups, to separate grouping errors from agent errors
 * Decoy suppression
 * Abstention on novel faults, and unnecessary abstention on known ones
@@ -557,7 +567,7 @@ Each behaviour gets a failing test before its code. For key behaviours I also br
 
 **Tier 3, stretch:** the data lake exploration agent, Remote PHY nodes, a one command AWS deploy and teardown.
 
-**Out of scope:** live replay on a wall clock, infrastructure as code and Glue crawlers, clock skew and duplicate tickets, free SQL for the investigation agent, generating the large dataset with Spark, simulated business metrics on their own, service groups shared by several nodes, DOCSIS 3.1 OFDM and PNM data, LLM written ticket text, an always on public demo.
+**Out of scope:** live replay on a wall clock, infrastructure as code and Glue crawlers, clock skew and duplicate tickets, free SQL for the investigation agent, generating the large dataset with Spark, simulated business metrics on their own, service groups shared by several nodes in the `eval` network (the `dev` network keeps two per service group on purpose, D-30), DOCSIS 3.1 OFDM and PNM data, LLM written ticket text, an always on public demo.
 
 ### 15.2 Scope rule
 
@@ -623,6 +633,10 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | D-25 | The data lake exploration agent stays a stretch goal | Moving it into the core | The time goes to memory, orchestration and expert review instead. SQL and Athena are still exercised by the tools and the storage backend |
 | D-26 | The DuckDB cutoff is views, a directory lock and a read only guard | Materializing filtered tables per session, locking all file access | Materializing needs too much memory at the `scale` size, and locking all file access also blocks the views, which read files at query time |
 | D-27 | The harness lives in `netsleuth/eval`, reports in `eval/reports` | A top level `eval` package | A package named `eval` shadows Python's built in `eval` |
+| D-28 | A fault claims every anomaly on its nodes and their service groups until the next fault there starts | One anomaly per fault | A route cut darkens four nodes, and scoring one anomaly per fault made the other three look like false alarms |
+| D-29 | Route faults are graded by route: 1.0 for the route, 0.5 for a node on it | Tree distance | A fiber route has no place in the network tree |
+| D-30 | The `dev` network keeps two nodes per service group | One node per service group, as the `eval` network has | Two nodes make upstream noise ambiguous between neighbours, as it is in real plants. Regenerating `dev` would also change every scenario's device IDs |
+| D-31 | Counts and events draw from their own random stream | One stream for everything | How many random numbers a Poisson draw uses depends on its rate, so one stream would let a fault shift the noise on every unrelated level after it |
 
 ## 18. Open questions
 

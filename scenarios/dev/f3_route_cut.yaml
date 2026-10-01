@@ -1,0 +1,10 @@
+# A backhoe cuts route-hub1-1, which carries four nodes from different service groups and both
+# CMTSs. Every node on it goes dark at once, and the right answer is the route, not any one node.
+case_id: f3-route-cut
+topology_seed: 0
+seed: 7
+ticks: 48
+faults:
+  - kind: fiber_cut
+    route: route-hub1-1
+    at_tick: 20

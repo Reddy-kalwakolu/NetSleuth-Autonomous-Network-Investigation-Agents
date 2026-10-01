@@ -1,0 +1,12 @@
+# Planned work on node 03 from 01:40 to 02:40, published at the start of the run. In the data it
+# looks exactly like a node cut. The only difference is the calendar, and the right response is to
+# send no one.
+case_id: d1-planned-maintenance
+topology_seed: 0
+seed: 9
+ticks: 48
+faults:
+  - kind: planned_maintenance
+    node_id: node-hub1-03
+    start_tick: 20
+    end_tick: 32

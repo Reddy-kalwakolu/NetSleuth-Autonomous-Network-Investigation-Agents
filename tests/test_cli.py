@@ -80,3 +80,16 @@ def test_week_one_exit_command(tmp_path: Path, capsys: pytest.CaptureFixture[str
     for scenario in (REPO / "scenarios" / "dev").glob("f1_*.yaml"):
         assert f"case {scenario.stem.replace('_', '-')}" in out
     assert "overall:" in out
+
+
+def test_milestone_2a_scenarios_score(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    patterns = ["f2_*.yaml", "f3_*.yaml", "d1_*.yaml"]
+    args = [str(REPO / "scenarios" / "dev" / p) for p in patterns]
+
+    code = main(["run", *args, *folders(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    for case in ("f2-ingress-evening", "f3-route-cut", "f3-node-cut", "d1-planned-maintenance"):
+        assert f"case {case}" in out
+    assert "not detected" not in out

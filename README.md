@@ -231,16 +231,18 @@ You need Python 3.12 or later and [uv](https://docs.astral.sh/uv/).
 git clone https://github.com/Reddy-kalwakolu/NetSleuth-Autonomous-Network-Investigation-Agents.git
 cd NetSleuth-Autonomous-Network-Investigation-Agents
 uv sync
-uv run netsleuth run scenarios/dev/f1_*.yaml
+uv run netsleuth run scenarios/dev/*.yaml
 ```
 
 Each scenario simulates the network, injects its faults, detects anomalies, diagnoses each one with the rules baseline, and prints a score against the hidden answer:
 
 ```text
+case d1-planned-maintenance  [rules]
+  planned_maintenance @ node-hub1-03  predicted planned_maintenance @ node-hub1-03  category 1.00  location 1.00
 case f1-blind-spot  [rules]
   amplifier_failure @ amp-hub1-node04-a14  predicted amplifier_failure @ amp-hub1-node04-a13  category 1.00  location 0.75
-case f1-partial  [rules]
-  amplifier_failure @ amp-hub1-node04-a1  not detected  category 0.00  location 0.00
+case f3-route-cut  [rules]
+  fiber_cut @ route-hub1-1  predicted fiber_cut @ route-hub1-1  category 1.00  location 1.00
 ```
 
 Scenario files live in [`scenarios/dev`](scenarios/dev), and each one says what it tests. Run the tests with `uv run pytest`.

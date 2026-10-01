@@ -1,0 +1,10 @@
+# Only node 02's fiber is cut. The node goes dark, but its route neighbours stay up, so this checks
+# the rules don't overcall a route cut.
+case_id: f3-node-cut
+topology_seed: 0
+seed: 8
+ticks: 48
+faults:
+  - kind: fiber_cut
+    node_id: node-hub1-02
+    at_tick: 20

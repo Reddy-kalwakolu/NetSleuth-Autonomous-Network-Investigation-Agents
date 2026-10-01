@@ -1,0 +1,14 @@
+# Noise leaks into node 01's plant every evening from 17:00 to 23:00 and drags down the whole
+# service group's upstream. The service group shares two nodes, so I expect the rules to pick the
+# noisier one from T3 timeouts, which may or may not be the true source.
+case_id: f2-ingress-evening
+topology_seed: 0
+seed: 6
+ticks: 288
+faults:
+  - kind: ingress_noise
+    node_id: node-hub1-01
+    at_tick: 0
+    snr_drop_db: 10
+    start_hour: 17
+    end_hour: 23
