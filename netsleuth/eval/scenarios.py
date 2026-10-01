@@ -10,9 +10,9 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from netsleuth.eval.cases import Case, build_fault
+from netsleuth.eval.cases import Case, CustomFaultSpec, build_fault
 from netsleuth.sandbox.engine import Engine, EngineError
-from netsleuth.sandbox.topology import generate_topology
+from netsleuth.sandbox.topology import Node, Topology, generate_topology
 
 
 class ScenarioError(ValueError):
@@ -39,11 +39,14 @@ def load_case(path: Path) -> Case:
     try:
         faults = [build_fault(spec, topology, f"check-{i}") for i, spec in enumerate(case.faults)]
         Engine(topology, faults, seed=case.seed)  # checks every effect's targets
-    except EngineError as error:
+    except (EngineError, ValidationError) as error:
         raise ScenarioError(
             f"{path}: {error} (the {case.topology_size} network, topology seed "
             f"{case.topology_seed})"
         ) from error
+    for spec in case.faults:
+        if isinstance(spec, CustomFaultSpec):
+            _check_answer_key(path, spec, topology)
     for fault in faults:
         if fault.start_tick >= case.ticks:
             raise ScenarioError(
@@ -51,3 +54,18 @@ def load_case(path: Path) -> Case:
                 f"at tick {case.ticks - 1}"
             )
     return case
+
+
+def _check_answer_key(path: Path, spec: CustomFaultSpec, topology: Topology) -> None:
+    """A custom fault's answer has to name something real, of the kind its graded level says.
+    It may name a different device than its effects hit, on purpose."""
+    routes = {n.fiber_route for n in topology.of_type(Node)}
+    root = spec.root_device_id
+    if spec.graded_level == "fiber_route":
+        if root not in routes:
+            raise ScenarioError(f"{path}: {root} is not a fiber route in this network")
+    elif root not in topology:
+        raise ScenarioError(f"{path}: the answer names {root}, which is not in this network")
+    target = spec.correct_action.target
+    if target is not None and target not in topology and target not in routes:
+        raise ScenarioError(f"{path}: the correct action targets {target}, which does not exist")

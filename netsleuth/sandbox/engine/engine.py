@@ -13,10 +13,11 @@ closed loop.
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 
+from netsleuth.sandbox.engine.clock import DEFAULT_START, TICK_MINUTES, hour_in_window
 from netsleuth.sandbox.engine.faults import Fault
 from netsleuth.sandbox.engine.primitives import (
     HEALTHY,
@@ -33,8 +34,6 @@ from netsleuth.sandbox.engine.primitives import (
 )
 from netsleuth.sandbox.topology import Node, ServiceGroup, Topology
 
-DEFAULT_START = datetime(2026, 9, 1, tzinfo=UTC)
-
 
 @dataclass(frozen=True)
 class CalendarEntry:
@@ -45,12 +44,6 @@ class CalendarEntry:
     published_tick: int
 
 
-def _hour_in_window(hour: float, start_hour: int, end_hour: int) -> bool:
-    if start_hour < end_hour:
-        return start_hour <= hour < end_hour
-    return hour >= start_hour or hour < end_hour  # wraps midnight
-
-
 class Engine:
     def __init__(
         self,
@@ -59,7 +52,7 @@ class Engine:
         seed: int,
         *,
         start: datetime = DEFAULT_START,
-        tick_minutes: int = 5,
+        tick_minutes: int = TICK_MINUTES,
     ) -> None:
         self.topology = topology
         self.faults = tuple(faults)
@@ -117,7 +110,7 @@ class Engine:
         return sum(
             n.snr_drop_db
             for n in self._noise.get(service_group_id, [])
-            if _hour_in_window(hour, n.start_hour, n.end_hour)
+            if hour_in_window(hour, n.start_hour, n.end_hour)
         )
 
     @property

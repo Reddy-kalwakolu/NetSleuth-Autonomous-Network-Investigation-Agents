@@ -94,13 +94,19 @@ def rules_baseline(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagn
     else:
         node_ids = [c for c in inventory.children[scope] if inventory.device_type[c] == "node"]
 
-    window = _active_window(session, [*node_ids, scope], session.as_of)
+    # Only planned work on the anomaly's own node, or on its whole service group, explains it.
+    # A sibling's window says nothing about this node.
+    own_scopes = [scope]
+    if inventory.device_type[scope] == "node" and (sg := inventory.parent[scope]) is not None:
+        own_scopes.append(sg)
+    window = _active_window(session, own_scopes, session.as_of)
     if window is not None:
+        window_id, window_scope = window
         return Diagnosis(
             incident_id=incident_id,
             root_cause_category="planned_maintenance",
-            root_cause_device_id=node_ids[0],
-            summary=f"Maintenance window {window} covers {node_ids[0]} right now.",
+            root_cause_device_id=window_scope,
+            summary=f"Maintenance window {window_id} covers {window_scope} right now.",
         )
     if signal in ("sg_snr", "t3_rate"):
         return _ingress(session, inventory, incident_id, node_ids)
@@ -109,18 +115,23 @@ def rules_baseline(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagn
     return _outage(session, inventory, incident_id, scope)
 
 
-def _active_window(session: StorageSession, scopes: list[str], as_of: datetime) -> str | None:
+def _active_window(
+    session: StorageSession, scopes: list[str], as_of: datetime
+) -> tuple[str, str] | None:
     """A published window covering one of the scopes at ``as_of``. Start inclusive, end
     exclusive. A run with no calendar has no windows."""
     if "maintenance" not in session.tables:
         return None
     placeholders = ", ".join("?" for _ in scopes)
     rows = session.query(
-        f"SELECT window_id FROM maintenance WHERE scope_device_id IN ({placeholders}) "
+        f"SELECT window_id, scope_device_id FROM maintenance "
+        f"WHERE scope_device_id IN ({placeholders}) "
         "AND starts_at <= ? AND ends_at > ?",
         [*scopes, as_of, as_of],
     )
-    return None if rows.is_empty() else str(rows["window_id"][0])
+    if rows.is_empty():
+        return None
+    return str(rows["window_id"][0]), str(rows["scope_device_id"][0])
 
 
 def _outage(

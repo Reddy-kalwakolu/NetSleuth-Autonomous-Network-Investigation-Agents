@@ -1,9 +1,11 @@
 """Faults: named bundles of primitives plus the answer an agent should reach."""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
+from netsleuth.sandbox.engine.clock import DEFAULT_START, TICK_MINUTES, first_tick_in_window
 from netsleuth.sandbox.engine.primitives import (
     AddUpstreamNoise,
     CutFiberRoute,
@@ -77,6 +79,8 @@ class Fault(BaseModel):
     effects: tuple[ScheduledEffect, ...]
     variant: str | None = None
     onset_tick: NonNegativeInt | None = None
+    # When the fault's effects stop, if they do. Anomalies after it aren't this fault's.
+    end_tick: NonNegativeInt | None = None
 
     @property
     def start_tick(self) -> int:
@@ -168,9 +172,14 @@ def ingress_noise(
     start_hour: int = 17,
     end_hour: int = 23,
     fault_id: str | None = None,
+    start: datetime = DEFAULT_START,
+    tick_minutes: int = TICK_MINUTES,
 ) -> Fault:
     """F2. Noise leaks in at one node and hurts the whole service group's upstream, mostly in
-    the evening. The fix is a sweep of the node's plant."""
+    the evening. The fix is a sweep of the node's plant.
+
+    The fault starts when the noise first shows, the first tick inside the window, not when it
+    is scheduled. ``start`` and ``tick_minutes`` must match the engine's clock."""
     _require(topology, node_id, Node, "a node")
     sg = topology.parent(node_id)
     assert isinstance(sg, ServiceGroup)
@@ -193,6 +202,9 @@ def ingress_noise(
                     end_hour=end_hour,
                 ),
             ),
+        ),
+        onset_tick=first_tick_in_window(
+            at_tick, start_hour, end_hour, start=start, tick_minutes=tick_minutes
         ),
     )
 
@@ -234,6 +246,7 @@ def planned_maintenance(
             ScheduledEffect(at_tick=end_tick, effect=Restore(device_id=node_id)),
         ),
         onset_tick=start_tick,
+        end_tick=end_tick,
     )
 
 

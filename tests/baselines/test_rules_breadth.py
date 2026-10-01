@@ -13,6 +13,7 @@ from netsleuth.eval import (
     FiberCutSpec,
     IngressNoiseSpec,
     PlannedMaintenanceSpec,
+    run_case,
     simulate_case,
 )
 from netsleuth.sandbox.topology import Amplifier, Modem, Node, Topology, generate_topology
@@ -116,3 +117,22 @@ def test_window_counts_as_active_at_its_exact_start(topo: Topology, tmp_path: Pa
     diagnosis = first_diagnosis(tmp_path, [spec], 20)
 
     assert diagnosis.root_cause_category == "planned_maintenance"
+
+
+def test_a_siblings_maintenance_does_not_explain_away_real_ingress(
+    topo: Topology, tmp_path: Path
+) -> None:
+    case = Case(
+        case_id="both",
+        ticks=288,
+        faults=[
+            PlannedMaintenanceSpec(node_id="node-hub1-02", start_tick=150, end_tick=300),
+            IngressNoiseSpec(node_id="node-hub1-01", at_tick=210),
+        ],
+    )
+
+    maintenance, ingress = run_case(case, rules_baseline, tmp_path / "d", tmp_path / "g").faults
+
+    assert maintenance.predicted_category == "planned_maintenance"
+    assert maintenance.predicted_device_id == "node-hub1-02"
+    assert ingress.predicted_category == "ingress_noise"

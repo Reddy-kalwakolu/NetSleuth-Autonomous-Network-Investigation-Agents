@@ -5,7 +5,8 @@ detector, and hand each anomaly to the system under test in a storage session cu
 anomaly's detection time. Only the harness reads the ground truth.
 
 Until the incident grouper exists, a fault claims every anomaly on the nodes it sits on or spans
-(and every node in their service groups), from its start until the next fault there starts. The
+(and every node in their service groups), from its start until its effects end or the next fault
+there starts, whichever comes first. The
 earliest claimed anomaly is diagnosed, and claimed anomalies never count as false alarms.
 """
 
@@ -68,14 +69,13 @@ def run_case(
     claimed: set[str] = set()
     scores_by_id: dict[str, FaultScore] = {}
     for i, fault in enumerate(faults):
-        until = min(
-            (
-                later["start_tick"]
-                for j, later in enumerate(faults)
-                if j > i and later["start_tick"] > fault["start_tick"] and scopes[j] & scopes[i]
-            ),
-            default=None,
-        )
+        later_starts = [
+            later["start_tick"]
+            for j, later in enumerate(faults)
+            if j > i and later["start_tick"] > fault["start_tick"] and scopes[j] & scopes[i]
+        ]
+        ends = later_starts + ([fault["end_tick"]] if fault.get("end_tick") is not None else [])
+        until = min(ends, default=None)
         mine = [
             r
             for r in rows

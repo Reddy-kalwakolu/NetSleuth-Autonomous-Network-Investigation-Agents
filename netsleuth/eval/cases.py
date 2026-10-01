@@ -81,6 +81,12 @@ class PlannedMaintenanceSpec(BaseModel):
     end_tick: NonNegativeInt
     publish_tick: NonNegativeInt = 0
 
+    @model_validator(mode="after")
+    def _ends_after_start(self) -> "PlannedMaintenanceSpec":
+        if self.end_tick <= self.start_tick:
+            raise ValueError("a maintenance window must end after it starts")
+        return self
+
 
 class CustomFaultSpec(BaseModel):
     """A fault written directly as primitives, with its answer spelled out. This is how
@@ -96,6 +102,7 @@ class CustomFaultSpec(BaseModel):
     effects: tuple[ScheduledEffect, ...]
     variant: str | None = None
     onset_tick: NonNegativeInt | None = None
+    end_tick: NonNegativeInt | None = None
 
 
 FaultSpec = Annotated[
@@ -156,6 +163,7 @@ def build_fault(spec: FaultSpec, topology: Topology, incident_id: str) -> Fault:
                 effects=spec.effects,
                 variant=spec.variant,
                 onset_tick=spec.onset_tick,
+                end_tick=spec.end_tick,
             )
 
 

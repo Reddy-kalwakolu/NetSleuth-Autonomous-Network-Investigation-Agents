@@ -11,6 +11,7 @@ from netsleuth.eval import (
     CustomFaultSpec,
     FiberCutSpec,
     IngressNoiseSpec,
+    PlannedMaintenanceSpec,
     System,
     fault_scopes,
     run_case,
@@ -150,4 +151,59 @@ def test_anomalies_outside_every_fault_are_false_alarms(topo: Topology, tmp_path
     result = run_case(case, answer("fiber_cut", None), tmp_path / "d", tmp_path / "g")
 
     assert not result.faults[0].detected
+    assert result.false_alarms == 1
+
+
+def test_evening_ingress_is_not_swallowed_by_a_later_sibling_failure(
+    topo: Topology, tmp_path: Path
+) -> None:
+    node01 = topo.of_type(Node)[0]
+    sg = topo.parent(node01.device_id)
+    assert isinstance(sg, ServiceGroup)
+    sibling = next(c for c in topo.children(sg.device_id) if c.device_id != node01.device_id)
+    sibling_amp = next(d for d in topo.subtree(sibling.device_id) if d.device_type == "amplifier")
+    case = Case(
+        case_id="evening",
+        ticks=288,
+        faults=[
+            IngressNoiseSpec(node_id=node01.device_id, at_tick=0),
+            AmplifierFailureSpec(amp_id=sibling_amp.device_id, at_tick=100),
+        ],
+    )
+
+    result = run_case(
+        case, answer("ingress_noise", node01.device_id), tmp_path / "d", tmp_path / "g"
+    )
+
+    assert [s.detected for s in result.faults] == [True, True]
+
+
+def test_a_finished_maintenance_window_does_not_hide_later_false_alarms(
+    topo: Topology, tmp_path: Path
+) -> None:
+    node03 = next(n for n in topo.of_type(Node) if n.device_id == "node-hub1-03")
+    node04 = next(n for n in topo.of_type(Node) if n.device_id == "node-hub1-04")
+    elsewhere = next(
+        n for n in topo.of_type(Node) if topo.parent(n.device_id) != topo.parent(node03.device_id)
+    )
+    case = Case(
+        case_id="after",
+        ticks=48,
+        faults=[
+            PlannedMaintenanceSpec(node_id=node03.device_id, start_tick=10, end_tick=20),
+            # The answer key names a node elsewhere, so node 04 going dark belongs to no fault.
+            CustomFaultSpec(
+                category="fiber_cut",
+                root_device_id=elsewhere.device_id,
+                graded_level="node",
+                correct_action=CorrectAction(action="no_action", target=None),
+                effects=(ScheduledEffect(at_tick=40, effect=TakeDown(device_id=node04.device_id)),),
+            ),
+        ],
+    )
+
+    result = run_case(
+        case, answer("planned_maintenance", node03.device_id), tmp_path / "d", tmp_path / "g"
+    )
+
     assert result.false_alarms == 1

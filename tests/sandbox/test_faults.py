@@ -119,3 +119,23 @@ def test_ground_truth_uses_the_window_start_for_maintenance(topo: Topology, tmp_
 
     assert record["faults"][0]["start_tick"] == 24
     assert record["faults"][0]["start_time"] == "2026-09-01T02:00:00+00:00"
+
+
+def test_ingress_starts_at_the_first_tick_inside_its_window(topo: Topology) -> None:
+    node = topo.of_type(Node)[0].device_id
+
+    assert ingress_noise(topo, node, at_tick=0, incident_id="i").start_tick == 17 * 12
+    assert ingress_noise(topo, node, at_tick=210, incident_id="i").start_tick == 210
+    # 23:20 is past today's window, so it first shows at 17:00 tomorrow.
+    assert ingress_noise(topo, node, at_tick=280, incident_id="i").start_tick == 288 + 17 * 12
+
+
+def test_maintenance_records_when_it_ends(topo: Topology, tmp_path: Path) -> None:
+    node = topo.of_type(Node)[0]
+    fault = planned_maintenance(topo, node.device_id, start_tick=24, end_tick=36, incident_id="i")
+    engine = Engine(topo, [fault], seed=0, start=datetime(2026, 9, 1, tzinfo=UTC))
+
+    record = json.loads(write_ground_truth(engine, "r", tmp_path).read_text(encoding="utf-8"))
+
+    assert fault.end_tick == 36
+    assert record["faults"][0]["end_tick"] == 36

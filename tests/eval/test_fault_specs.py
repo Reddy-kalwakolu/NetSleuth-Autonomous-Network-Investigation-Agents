@@ -138,3 +138,46 @@ def test_custom_fault_with_an_unknown_device_fails_at_load(tmp_path: Path) -> No
 
     with pytest.raises(ScenarioError, match="amp-hub1-node01-a999"):
         load_case(path)
+
+
+def test_maintenance_ending_before_it_starts_is_a_scenario_error(tmp_path: Path) -> None:
+    path = write(
+        tmp_path / "backwards.yaml",
+        "faults:\n  - kind: planned_maintenance\n    node_id: node-hub1-01\n"
+        "    start_tick: 20\n    end_tick: 10\n",
+    )
+
+    with pytest.raises(ScenarioError, match=r"backwards.yaml"):
+        load_case(path)
+
+
+def test_ingress_whose_window_never_comes_in_the_run_is_rejected(tmp_path: Path) -> None:
+    path = write(
+        tmp_path / "short.yaml",
+        "ticks: 100\nfaults:\n  - kind: ingress_noise\n    node_id: node-hub1-01\n    at_tick: 0\n",
+    )
+
+    with pytest.raises(ScenarioError, match="after the run ends"):
+        load_case(path)
+
+
+@pytest.mark.parametrize(
+    ("root", "level"),
+    [("amp-typo", "amplifier"), ("route-typo", "fiber_route"), ("node-hub1-01", "fiber_route")],
+)
+def test_custom_answer_key_must_name_something_real(tmp_path: Path, root: str, level: str) -> None:
+    path = write(
+        tmp_path / "answer.yaml",
+        "faults:\n"
+        "  - kind: custom\n"
+        "    category: fiber_cut\n"
+        f"    root_device_id: {root}\n"
+        f"    graded_level: {level}\n"
+        "    correct_action:\n      action: no_action\n      target: null\n"
+        "    effects:\n"
+        "      - at_tick: 1\n        effect:\n          kind: take_down\n"
+        "          device_id: node-hub1-01\n",
+    )
+
+    with pytest.raises(ScenarioError, match=root):
+        load_case(path)

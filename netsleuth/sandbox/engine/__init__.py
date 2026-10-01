@@ -1,6 +1,7 @@
 """The NetSandbox state engine: ticks, device state, reachability, faults and ground truth."""
 
-from netsleuth.sandbox.engine.engine import DEFAULT_START, CalendarEntry, Engine
+from netsleuth.sandbox.engine.clock import DEFAULT_START
+from netsleuth.sandbox.engine.engine import CalendarEntry, Engine
 from netsleuth.sandbox.engine.faults import (
     CorrectAction,
     Fault,
