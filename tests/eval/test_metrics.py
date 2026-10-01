@@ -1,6 +1,6 @@
 import pytest
 
-from netsleuth.eval import category_score, location_score, tree_distance
+from netsleuth.eval import category_score, location_score, route_location_score, tree_distance
 from netsleuth.sandbox.topology import Amplifier, Modem, Node, Topology, generate_topology
 
 
@@ -48,3 +48,15 @@ def test_category_is_all_or_nothing() -> None:
     assert category_score("amplifier_failure", "amplifier_failure") == 1.0
     assert category_score("fiber_cut", "amplifier_failure") == 0.0
     assert category_score(None, "amplifier_failure") == 0.0
+
+
+def test_route_faults_credit_the_route_fully_and_its_nodes_half(topo: Topology) -> None:
+    nodes = topo.of_type(Node)
+    route = nodes[0].fiber_route
+    on_route = next(n for n in nodes if n.fiber_route == route)
+    off_route = next(n for n in nodes if n.fiber_route != route)
+
+    assert route_location_score(topo, route, route) == 1.0
+    assert route_location_score(topo, on_route.device_id, route) == 0.5
+    assert route_location_score(topo, off_route.device_id, route) == 0.0
+    assert route_location_score(topo, None, route) == 0.0

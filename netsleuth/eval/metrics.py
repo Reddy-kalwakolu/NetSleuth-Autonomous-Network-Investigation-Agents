@@ -1,6 +1,6 @@
 """Scores checked by code against the ground truth. No LLM involved."""
 
-from netsleuth.sandbox.topology import Topology
+from netsleuth.sandbox.topology import Node, Topology
 
 # Location credit drops by a quarter per hop in the tree, so a truck sent one amplifier over still
 # earns something, and four or more hops away earns nothing.
@@ -27,3 +27,18 @@ def location_score(topology: Topology, predicted: str | None, actual: str) -> fl
 
 def category_score(predicted: str | None, actual: str) -> float:
     return 1.0 if predicted == actual else 0.0
+
+
+# Sending a crew to one node on a cut route finds the cut eventually, but the route is the answer
+# that gets the right crew and the right span from the start.
+ROUTE_NODE_CREDIT = 0.5
+
+
+def route_location_score(topology: Topology, predicted: str | None, route: str) -> float:
+    if predicted == route:
+        return 1.0
+    if predicted is not None and predicted in topology:
+        device = topology[predicted]
+        if isinstance(device, Node) and device.fiber_route == route:
+            return ROUTE_NODE_CREDIT
+    return 0.0
