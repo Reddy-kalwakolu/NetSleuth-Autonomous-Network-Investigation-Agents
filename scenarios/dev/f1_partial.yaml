@@ -1,6 +1,6 @@
 # The first amplifier on node 04 degrades instead of dying: downstream power drops 8 dB and modems
-# push 6 dB harder upstream, but nothing goes offline. The week 1 detector only watches outages, so
-# I expect this one to be missed until RF based detection arrives.
+# push 6 dB harder upstream, but nothing goes offline. Share offline stays quiet, so the RF level
+# drop signal has to catch it, and the rules should still pin it to the amplifier.
 case_id: f1-partial
 topology_seed: 0
 seed: 4
