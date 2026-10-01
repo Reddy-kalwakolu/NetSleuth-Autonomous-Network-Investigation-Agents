@@ -4,8 +4,9 @@ For each case: simulate and write the data, write the ground truth to its own fo
 detector, and hand each anomaly to the system under test in a storage session cut off at the
 anomaly's detection time. Only the harness reads the ground truth.
 
-Until the incident grouper exists, each anomaly stands in for one incident, and a fault is matched
-to the earliest unused anomaly on the node that contains it, at or after the fault started.
+Until the incident grouper exists, a fault claims every anomaly on the nodes it sits on or spans
+(and every node in their service groups), from its start until the next fault there starts. The
+earliest claimed anomaly is diagnosed, and claimed anomalies never count as false alarms.
 """
 
 import json
@@ -17,8 +18,8 @@ from typing import Any
 from netsleuth.detector import detect_anomalies
 from netsleuth.diagnosis import Diagnosis
 from netsleuth.eval.cases import Case, simulate_case
-from netsleuth.eval.metrics import category_score, location_score
-from netsleuth.sandbox.topology import Node, Topology
+from netsleuth.eval.metrics import category_score, location_score, route_location_score
+from netsleuth.sandbox.topology import Node, ServiceGroup, Topology
 from netsleuth.storage import DuckDBStorage, RunWriter, StorageSession
 
 System = Callable[[StorageSession, Mapping[str, Any]], Diagnosis]
@@ -61,48 +62,61 @@ def run_case(
             writer.append("anomaly_events", anomalies)
 
     truth = json.loads((ground_truth_dir / f"{sim.run_id}.json").read_text(encoding="utf-8"))
-    rows = sorted(anomalies.iter_rows(named=True), key=lambda r: r["tick"])
-    used: set[str] = set()
-    scores = []
-    for fault in truth["faults"]:
-        node_id = _node_containing(sim.topology, fault["root_device_id"])
-        match = next(
+    rows = sorted(anomalies.iter_rows(named=True), key=lambda r: (r["tick"], r["anomaly_id"]))
+    faults = sorted(truth["faults"], key=lambda f: f["start_tick"])
+    scopes = [fault_scopes(sim.topology, f["root_device_id"]) for f in faults]
+    claimed: set[str] = set()
+    scores_by_id: dict[str, FaultScore] = {}
+    for i, fault in enumerate(faults):
+        until = min(
             (
-                r
-                for r in rows
-                if r["scope_device_id"] == node_id
-                and r["tick"] >= fault["start_tick"]
-                and r["anomaly_id"] not in used
+                later["start_tick"]
+                for j, later in enumerate(faults)
+                if j > i and later["start_tick"] > fault["start_tick"] and scopes[j] & scopes[i]
             ),
-            None,
+            default=None,
         )
-        if match is None:
-            scores.append(_missed(fault))
+        mine = [
+            r
+            for r in rows
+            if r["scope_device_id"] in scopes[i]
+            and r["tick"] >= fault["start_tick"]
+            and (until is None or r["tick"] < until)
+            and r["anomaly_id"] not in claimed
+        ]
+        if not mine:
+            scores_by_id[fault["fault_id"]] = _missed(fault)
             continue
-        used.add(match["anomaly_id"])
-        with storage.session(sim.run_id, match["ts"]) as session:
-            diagnosis = system(session, match)
-        scores.append(
-            FaultScore(
-                fault_id=fault["fault_id"],
-                true_category=fault["category"],
-                true_device_id=fault["root_device_id"],
-                detected=True,
-                predicted_category=diagnosis.root_cause_category,
-                predicted_device_id=diagnosis.root_cause_device_id,
-                category_score=category_score(diagnosis.root_cause_category, fault["category"]),
-                location_score=location_score(
-                    sim.topology, diagnosis.root_cause_device_id, fault["root_device_id"]
-                ),
+        claimed.update(r["anomaly_id"] for r in mine)
+        first = mine[0]
+        with storage.session(sim.run_id, first["ts"]) as session:
+            diagnosis = system(session, first)
+        if fault["graded_level"] == "fiber_route":
+            where = route_location_score(
+                sim.topology, diagnosis.root_cause_device_id, fault["root_device_id"]
             )
+        else:
+            where = location_score(
+                sim.topology, diagnosis.root_cause_device_id, fault["root_device_id"]
+            )
+        scores_by_id[fault["fault_id"]] = FaultScore(
+            fault_id=fault["fault_id"],
+            true_category=fault["category"],
+            true_device_id=fault["root_device_id"],
+            detected=True,
+            predicted_category=diagnosis.root_cause_category,
+            predicted_device_id=diagnosis.root_cause_device_id,
+            category_score=category_score(diagnosis.root_cause_category, fault["category"]),
+            location_score=where,
         )
+    scores = [scores_by_id[f["fault_id"]] for f in truth["faults"]]
 
     name = system_name or system.__name__.removesuffix("_baseline")
     return CaseResult(
         case_id=case.case_id,
         system=name,
         faults=tuple(scores),
-        false_alarms=anomalies.height - len(used),
+        false_alarms=anomalies.height - len(claimed),
     )
 
 
@@ -133,6 +147,19 @@ def format_scores(results: Sequence[CaseResult]) -> str:
             f"false alarms {sum(r.false_alarms for r in results)}"
         )
     return "\n".join(lines)
+
+
+def fault_scopes(topology: Topology, root_device_id: str) -> set[str]:
+    """Nodes a fault sits on or spans, their service groups, and every node in those service
+    groups. Upstream trouble hurts a whole service group, so a sibling node's anomaly belongs to
+    the same fault."""
+    if root_device_id in topology:
+        nodes = {_node_containing(topology, root_device_id)}
+    else:  # a fiber route
+        nodes = {n.device_id for n in topology.of_type(Node) if n.fiber_route == root_device_id}
+    groups = {p.device_id for n in nodes if isinstance(p := topology.parent(n), ServiceGroup)}
+    siblings = {c.device_id for g in groups for c in topology.children(g) if isinstance(c, Node)}
+    return nodes | groups | siblings
 
 
 def _node_containing(topology: Topology, device_id: str) -> str:

@@ -12,7 +12,14 @@ from netsleuth.eval.cases import (
     build_fault,
     simulate_case,
 )
-from netsleuth.eval.harness import CaseResult, FaultScore, System, format_scores, run_case
+from netsleuth.eval.harness import (
+    CaseResult,
+    FaultScore,
+    System,
+    fault_scopes,
+    format_scores,
+    run_case,
+)
 from netsleuth.eval.metrics import (
     category_score,
     location_score,
@@ -36,6 +43,7 @@ __all__ = [
     "System",
     "build_fault",
     "category_score",
+    "fault_scopes",
     "format_scores",
     "load_case",
     "location_score",
