@@ -4,9 +4,14 @@ Every value is a per device baseline (drawn once per run), plus a daily pattern,
 whatever the active faults do. Two kinds of source follow different rules:
 
 * Measured at the CMTS, in the hub: always present. That's every modem's online state, how loud the
-  CMTS hears each modem, upstream SNR per channel, and service group load.
+  CMTS hears each modem, upstream SNR and uncorrectable codewords per channel, and service group
+  load.
 * Sent back over the cable plant: present only while the device is reachable. That's modem RF,
-  codeword counters and node optical levels. A dead amplifier shows up as missing rows.
+  codeword counters, the modem event log (T3 and T4 timeouts) and node optical levels. A dead
+  amplifier shows up as missing rows. When a modem comes back it logs a T4 and its counters
+  restart, because it rebooted.
+
+Planned maintenance windows are written to the calendar table once, when they're published.
 
 Everything is computed with numpy across all devices at once, and anything derived from fault state
 is cached until the engine applies another effect, so month long runs at the ``scale`` size stay
@@ -54,6 +59,20 @@ CMTS_MER_LOSS_PER_DB = 1.5  # upstream MER lost per dB a modem falls short of wh
 CORRECTED_PER_POLL = 40.0
 UNCORRECTABLE_PER_POLL = 0.05
 
+# Ingress lands on the low frequency upstream channels hardest.
+LOW_CHANNELS = 2
+HIGH_CHANNEL_NOISE_SHARE = 0.25
+CMTS_MER_PER_NOISE_DB = 0.8
+US_UNCORRECTABLE_PER_TICK = 0.2
+US_UNCORRECTABLE_SNR_KNEE_DB = 30.0
+US_UNCORRECTABLE_PER_DB = 1.0  # error correction falls off a cliff below the knee
+
+# T3 timeouts: the modem's upstream ranging went unanswered. Rare on a clean plant, common once
+# the service group's low channels get noisy.
+T3_BASE_PER_TICK = 0.0002
+T3_PER_DB = 0.02
+T3_SNR_KNEE_DB = 30.0
+
 NODE_TEMP_BASE_C = 20.0
 NODE_TEMP_SWING_C = 15.0
 
@@ -67,6 +86,8 @@ class TickTelemetry:
     sg_channels: pl.DataFrame
     sg_status: pl.DataFrame
     node_optical: pl.DataFrame
+    cm_events: pl.DataFrame
+    maintenance: pl.DataFrame
 
 
 TS = pl.Datetime("us", "UTC")
@@ -80,6 +101,14 @@ CM_RF_SCHEMA: dict[str, pl.DataType] = {
     "us_tx_power_dbmv": pl.Float64(),
     "corrected_cw_total": pl.Int64(),
     "uncorrectable_cw_total": pl.Int64(),
+}
+
+CM_EVENTS_SCHEMA: dict[str, pl.DataType] = {"modem_id": pl.String(), "event": pl.String()}
+MAINTENANCE_SCHEMA: dict[str, pl.DataType] = {
+    "window_id": pl.String(),
+    "scope_device_id": pl.String(),
+    "starts_at": TS,
+    "ends_at": TS,
 }
 
 
@@ -126,6 +155,20 @@ class TelemetryGenerator:
         self._channel_sg = [sg.device_id for sg in self._sgs for _ in range(sg.us_channels)]
         self._channel_names = [f"us{c + 1}" for sg in self._sgs for c in range(sg.us_channels)]
         self._snr_base = rng.uniform(*US_SNR_BASE, len(self._channel_sg))
+        sg_position = {sg.device_id: i for i, sg in enumerate(self._sgs)}
+        self._channel_sg_index = np.array(
+            [sg_position[s] for s in self._channel_sg], dtype=np.int64
+        )
+        channel_number = np.array([int(name[2:]) for name in self._channel_names])
+        self._channel_noise_share = np.where(
+            channel_number <= LOW_CHANNELS, 1.0, HIGH_CHANNEL_NOISE_SHARE
+        )
+        self._sg_low_channels = [
+            np.flatnonzero((self._channel_sg_index == i) & (channel_number <= LOW_CHANNELS))
+            for i in range(len(self._sgs))
+        ]
+        self._us_uncorrectable = np.zeros(len(self._channel_sg), dtype=np.int64)
+        self._modem_id_array = np.array(self._modem_ids)
 
         self._nodes = topo.of_type(Node)
         self._node_ids = [node.device_id for node in self._nodes]
@@ -133,6 +176,12 @@ class TelemetryGenerator:
 
         self._corrected = np.zeros(n, dtype=np.int64)
         self._uncorrectable = np.zeros(n, dtype=np.int64)
+
+        self._was_up = np.ones(n, dtype=bool)
+        # Counts and events draw from their own stream. How many random numbers a Poisson
+        # draw uses depends on its rate, so sharing one stream would let a fault shift the
+        # noise on every unrelated level after it.
+        self._event_rng = np.random.default_rng(rng.integers(0, 2**63))
 
         self._revision = -1
         self._modem_up = np.ones(n, dtype=bool)
@@ -163,6 +212,11 @@ class TelemetryGenerator:
         heat = afternoon_heat(hour)
         n = len(self._modem_ids)
         up = self._modem_up
+        noise = np.array([engine.us_noise_db(sg) for sg in self._sg_ids])
+        came_back = up & ~self._was_up  # modems that just rebooted
+        self._was_up = up.copy()
+        self._corrected[came_back] = 0
+        self._uncorrectable[came_back] = 0
 
         # Modem levels. Noise is drawn for every modem every tick, so the random stream doesn't
         # depend on which devices happen to be up.
@@ -187,7 +241,10 @@ class TelemetryGenerator:
         shortfall = np.maximum(0.0, needed_tx - MAX_US_TX_DBMV)
         cmts_rx = rng.normal(0, CMTS_RX_NOISE, n) - shortfall
         us_mer = (
-            self._us_mer_base + rng.normal(0, US_MER_NOISE, n) - CMTS_MER_LOSS_PER_DB * shortfall
+            self._us_mer_base
+            + rng.normal(0, US_MER_NOISE, n)
+            - CMTS_MER_LOSS_PER_DB * shortfall
+            - CMTS_MER_PER_NOISE_DB * noise[self._modem_sg]
         )
 
         cm_status = pl.DataFrame(
@@ -222,12 +279,14 @@ class TelemetryGenerator:
             }
         )
 
+        channel_count = len(self._channel_sg)
+        snr = (
+            self._snr_base
+            + rng.normal(0, US_SNR_NOISE, channel_count)
+            - noise[self._channel_sg_index] * self._channel_noise_share
+        )
         sg_channels = pl.DataFrame(
-            {
-                "sg_id": self._channel_sg,
-                "channel": self._channel_names,
-                "us_snr_db": self._snr_base + rng.normal(0, US_SNR_NOISE, len(self._channel_sg)),
-            }
+            {"sg_id": self._channel_sg, "channel": self._channel_names, "us_snr_db": snr}
         )
 
         node_count = len(self._nodes)
@@ -241,6 +300,45 @@ class TelemetryGenerator:
             }
         ).filter(pl.Series(self._node_up))
 
+        # Upstream codewords the CMTS couldn't decode, per channel. Always present.
+        us_unc_rate = US_UNCORRECTABLE_PER_TICK * np.exp(
+            US_UNCORRECTABLE_PER_DB * np.maximum(0.0, US_UNCORRECTABLE_SNR_KNEE_DB - snr)
+        )
+        self._us_uncorrectable += self._event_rng.poisson(us_unc_rate)
+        sg_channels = sg_channels.with_columns(
+            pl.Series("us_uncorrectable_cw_total", self._us_uncorrectable.copy())
+        )
+
+        # The modem event log travels over the plant, so only reachable modems report.
+        low_snr = np.array([snr[idx].min() for idx in self._sg_low_channels])
+        t3_chance = T3_BASE_PER_TICK + T3_PER_DB * np.maximum(
+            0.0, T3_SNR_KNEE_DB - low_snr[self._modem_sg]
+        )
+        t3 = up & (self._event_rng.random(n) < t3_chance)
+        cm_events = pl.DataFrame(
+            {
+                "modem_id": np.concatenate(
+                    [self._modem_id_array[t3], self._modem_id_array[came_back]]
+                ).tolist(),
+                "event": ["T3"] * int(t3.sum()) + ["T4"] * int(came_back.sum()),
+            },
+            schema=CM_EVENTS_SCHEMA,
+        )
+
+        maintenance = pl.DataFrame(
+            [
+                {
+                    "window_id": w.window_id,
+                    "scope_device_id": w.scope_id,
+                    "starts_at": engine.time_of(w.start_tick),
+                    "ends_at": engine.time_of(w.end_tick),
+                }
+                for w in engine.calendar
+                if w.published_tick == tick
+            ],
+            schema=MAINTENANCE_SCHEMA,
+        )
+
         # Codeword counters are cumulative. They climb faster as downstream MER falls, only count
         # while the modem is reachable, and are read when the modem is polled.
         if tick % self.rf_poll_every == 0:
@@ -248,8 +346,8 @@ class TelemetryGenerator:
             uncorrectable_rate = UNCORRECTABLE_PER_POLL * np.exp(
                 1.2 * np.maximum(0.0, 35.0 - ds_mer)
             )
-            self._corrected += np.where(up, rng.poisson(corrected_rate), 0)
-            self._uncorrectable += np.where(up, rng.poisson(uncorrectable_rate), 0)
+            self._corrected += np.where(up, self._event_rng.poisson(corrected_rate), 0)
+            self._uncorrectable += np.where(up, self._event_rng.poisson(uncorrectable_rate), 0)
             cm_rf = pl.DataFrame(
                 {
                     "modem_id": self._modem_ids,
@@ -274,6 +372,8 @@ class TelemetryGenerator:
             sg_channels=_stamp(sg_channels, tick, ts),
             sg_status=_stamp(sg_status, tick, ts),
             node_optical=_stamp(node_optical, tick, ts),
+            cm_events=_stamp(cm_events, tick, ts),
+            maintenance=_stamp(maintenance, tick, ts),
         )
 
 

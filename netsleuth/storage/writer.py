@@ -19,7 +19,15 @@ import polars as pl
 
 from netsleuth.sandbox.telemetry import TickTelemetry
 
-TELEMETRY_TABLES = ("cm_status", "cm_rf", "sg_channels", "sg_status", "node_optical")
+TELEMETRY_TABLES = (
+    "cm_status",
+    "cm_rf",
+    "sg_channels",
+    "sg_status",
+    "node_optical",
+    "cm_events",
+    "maintenance",
+)
 
 
 class RunWriter:
