@@ -410,6 +410,16 @@ On the dev set with `gpt-5.4-mini`, version 2 raised the agent's location score 
 
 Both LLM systems still call the node cut `unknown` and the partial amplifier `ingress_noise`, each at the right device. On these ten faults the agent does not beat the single prompt, which costs a sixth as much. Ten faults are too few to tune against any further, so I stop prompt work here and let the holdout set in milestone 2c decide whether the graph earns its cost.
 
+**Milestone 2 dev results.** After milestone 2c grew the dev set to 20 cases and 23 faults, I ran all three systems on it with prompt version 3 and `gpt-5.4-mini`, on October 2, 2026:
+
+| System | Category | Location | Cost per incident |
+|---|---|---|---|
+| Rules | 1.00 | 0.97 | free |
+| Single prompt | 0.83 | 0.86 | $0.0019 |
+| Agent | 0.83 | 0.93 | $0.0110 |
+
+Every system detected all 23 faults with no false alarms. The agent got the category right on both ingress cases, where the single prompt called them capacity congestion on a fiber route, and it named the right node on the original node cut, where the single prompt named the whole route. The single prompt did better on node cuts, getting the category right on both, while the agent called one an amplifier failure and the other unknown. Both name the right amplifier on partial failures but mostly call them ingress noise or unknown, which is the clearest gap. Both name the blind spot amplifier one hop off. The rules lead on these clean, single faults, as I predicted in section 12.3. Messy data, overlapping faults and novel faults arrive in milestone 3, and the first holdout run there is the real test.
+
 ### 10.3 Recommendation agent
 
 Maps the report to candidate actions from a runbook table, where each row has the action, preconditions, risk level and typical time to effect. The model picks one and explains why. The output is a `ProposedAction` with action, target, parameters, reasoning, risk and expected outcome. Only low risk actions, such as `monitor` and `route_to_team`, can skip approval.
@@ -623,7 +633,7 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | The simulator isn't realistic enough | Domain details checked against how cable plants behave, assumptions listed openly, a cable engineer reviews the fault catalog |
 | The simulator grows out of control | A 45 hour cap, the scope rule, faults built from shared primitives |
 | The evaluation set is small and related | Bootstrapping by template, results per fault type, case by case comparison |
-| LLM costs | Measured on October 1, 2026 with `gpt-5.4-mini` on the dev scenarios: about $0.008 per investigation for the agent and $0.0014 for the single prompt, so the $50 monthly cap covers thousands of investigations. Every run is priced and stopped at `max_cost_usd_per_run`; tiered CI and cached results keep repeat runs cheap |
+| LLM costs | Measured on October 2, 2026 with `gpt-5.4-mini` on the 20 dev cases: about $0.011 per investigation for the agent and $0.0019 for the single prompt, so the $50 monthly cap covers thousands of investigations. Every run is priced and stopped at `max_cost_usd_per_run`; tiered CI and cached results keep repeat runs cheap |
 | LangSmith free tier limits | Each investigation is one trace; a full dev run is about 30 traces across the two LLM systems. I watch the monthly count as the case set grows |
 | Milestone 1 is dense | Tasks 7 and 8 can move into milestone 2 without changing scope |
 
