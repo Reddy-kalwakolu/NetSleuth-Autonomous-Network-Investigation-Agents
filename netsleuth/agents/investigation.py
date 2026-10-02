@@ -16,9 +16,15 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from netsleuth.agents.context import Context, gather_context, render_blast, render_findings
+from netsleuth.agents.context import (
+    Context,
+    gather_context,
+    named_in,
+    render_blast,
+    render_findings,
+)
 from netsleuth.agents.playbooks import Check, checks_for
-from netsleuth.agents.prompts import PROMPT_VERSION, load_prompt
+from netsleuth.agents.prompts import PROMPT_VERSION, PromptVersion, load_prompt
 from netsleuth.agents.report import Evidence, InvestigationReport, RuledOut
 from netsleuth.agents.schemas import EvidenceRequest, Hypotheses, Scores
 from netsleuth.models import LLMError, StructuredLLM, Usage
@@ -44,9 +50,15 @@ class InvestigationAgent:
     name = "agent"
 
     def __init__(
-        self, llm: StructuredLLM, *, max_tool_calls: int = 8, confidence_threshold: float = 0.5
+        self,
+        llm: StructuredLLM,
+        *,
+        max_tool_calls: int = 8,
+        confidence_threshold: float = 0.5,
+        prompt_version: PromptVersion = PROMPT_VERSION,
     ) -> None:
         self.llm = llm
+        self.prompt_version = prompt_version
         self.max_tool_calls = max_tool_calls
         self.confidence_threshold = confidence_threshold
         self.tool_calls = 0
@@ -72,25 +84,26 @@ class InvestigationAgent:
                 root_cause_device_id=None,
                 confidence=0.0,
                 summary=f"The investigation could not finish: {error}",
-                prompt_version=PROMPT_VERSION,
+                prompt_version=self.prompt_version,
             )
         report: InvestigationReport = final["report"]
         return report
 
     def _graph(self, session: StorageSession) -> Any:
-        llm, cap, threshold, system = (
+        llm, cap, threshold, version = (
             self.llm,
             self.max_tool_calls,
             self.confidence_threshold,
-            load_prompt("system"),
+            self.prompt_version,
         )
+        system = load_prompt("system", version)
 
         def context(state: State) -> State:
             return {"context": gather_context(session, state["anomaly"])}
 
         def hypothesize(state: State) -> State:
             ctx = state["context"]
-            user = load_prompt("hypothesize").format(
+            user = load_prompt("hypothesize", version).format(
                 anomaly=_render_anomaly(state["anomaly"]),
                 findings=render_findings(ctx.findings),
                 blast=render_blast(ctx.blast),
@@ -101,7 +114,7 @@ class InvestigationAgent:
 
         def gather(state: State) -> State:
             ctx, offered, used = state["context"], list(state["offered"]), state["tool_calls"]
-            user = load_prompt("gather").format(
+            user = load_prompt("gather", version).format(
                 budget=cap - used,
                 hypotheses=_render_hypotheses(state["hypotheses"]),
                 findings=render_findings(ctx.findings),
@@ -123,7 +136,7 @@ class InvestigationAgent:
 
         def score(state: State) -> State:
             ctx = state["context"]
-            user = load_prompt("score").format(
+            user = load_prompt("score", version).format(
                 hypotheses=_render_hypotheses(state["hypotheses"]),
                 findings=render_findings(ctx.findings),
                 blast=render_blast(ctx.blast),
@@ -134,12 +147,21 @@ class InvestigationAgent:
             ctx, scores = state["context"], state["scores"]
             ranked = sorted(scores.scored, key=lambda s: s.confidence, reverse=True)
             top = ranked[0]
+            # A device counts only if it is real and the model was shown it, so a name guessed
+            # from the naming pattern is dropped even when it happens to exist.
             inv = inventory(session)
-            device = (
-                top.device_id
-                if top.device_id in inv.device_type or top.device_id in inv.routes
-                else None
+            shown = "\n".join(
+                (
+                    _render_anomaly(state["anomaly"]),
+                    render_findings(ctx.findings),
+                    render_blast(ctx.blast),
+                )
             )
+            device = top.device_id
+            if device is None or not (
+                (device in inv.device_type or device in inv.routes) and named_in(device, shown)
+            ):
+                device = None
             category = top.category if top.confidence >= threshold else "insufficient_evidence"
             if category == "insufficient_evidence":
                 device = None
@@ -160,7 +182,7 @@ class InvestigationAgent:
                     for s in ranked[1:]
                 ),
                 summary=scores.summary,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=version,
             )
             return {"report": report}
 

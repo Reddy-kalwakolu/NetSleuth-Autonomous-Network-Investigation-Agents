@@ -40,7 +40,7 @@ def test_agent_reports_the_scripted_answer_with_rerunnable_evidence(
     assert report.evidence
     for item in report.evidence:
         assert rerun(after, item.query_ref).summary.startswith(item.claim[:20])
-    assert report.prompt_version == "investigation-v1"
+    assert report.prompt_version == "investigation-v2"
 
 
 def test_an_invented_device_is_dropped(
@@ -158,3 +158,81 @@ def test_model_access_errors_escape_the_agent(
 
     with pytest.raises(ModelAccessError):
         InvestigationAgent(ScriptedLLM(locked_out))(after, amp_anomaly)
+
+
+def test_the_agent_uses_and_records_the_prompt_version_it_was_given(
+    after: DuckDBSession, amp_anomaly: Mapping[str, Any]
+) -> None:
+    from netsleuth.agents import load_prompt
+
+    honest = oracle("amplifier_failure", "amp-hub1-node04-a1")
+    systems: list[str] = []
+
+    def spy(schema: type[BaseModel], system: str, user: str) -> BaseModel:
+        systems.append(system)
+        return honest(schema, system, user)
+
+    report = InvestigationAgent(ScriptedLLM(spy), prompt_version="investigation-v1")(
+        after, amp_anomaly
+    )
+
+    assert report.prompt_version == "investigation-v1"
+    assert set(systems) == {load_prompt("system", "investigation-v1")}
+
+
+def test_hypotheses_without_a_playbook_still_get_checks(
+    after: DuckDBSession, amp_anomaly: Mapping[str, Any]
+) -> None:
+    menus: list[list[str]] = []
+
+    def power_minded(schema: type[BaseModel], system: str, user: str) -> BaseModel:
+        if schema is Hypotheses:
+            return Hypotheses(
+                ranked=[
+                    Hypothesis(category="commercial_power_outage", why="x"),
+                    Hypothesis(category="power_supply_failure", why="y"),
+                ]
+            )
+        if schema is EvidenceRequest:
+            menu = [
+                line[2:]
+                for line in user.split("Menu:\n", 1)[1].splitlines()
+                if line.startswith("- ")
+            ]
+            menus.append(menu)
+            return EvidenceRequest(checks=menu, done=True)
+        return Scores(
+            scored=[ScoredHypothesis(category="commercial_power_outage", confidence=0.6)],
+            summary="s",
+        )
+
+    agent = InvestigationAgent(ScriptedLLM(power_minded))
+
+    agent(after, amp_anomaly)
+
+    assert menus and "fiber.route_health" in menus[0] and "amplifier.subtree" in menus[0]
+    assert agent.tool_calls >= 1
+
+
+UNSHOWN = "amp-hub1-node07-a1"  # real, on another node, and in no fact about node 04
+
+
+def test_a_real_device_the_model_was_never_shown_is_dropped(
+    after: DuckDBSession, amp_anomaly: Mapping[str, Any]
+) -> None:
+    from netsleuth.tools import inventory
+
+    honest = oracle("amplifier_failure", UNSHOWN)
+    shown: list[str] = []
+
+    def spy(schema: type[BaseModel], system: str, user: str) -> BaseModel:
+        shown.append(user)
+        return honest(schema, system, user)
+
+    report = InvestigationAgent(ScriptedLLM(spy))(after, amp_anomaly)
+
+    assert UNSHOWN in inventory(after).device_type
+    facts = [shown[0], shown[-1].split("\nFacts:\n", 1)[1]]  # the model's own guesses excluded
+    assert not any(UNSHOWN in text for text in facts)
+    assert report.root_cause_category == "amplifier_failure"
+    assert report.root_cause_device_id is None

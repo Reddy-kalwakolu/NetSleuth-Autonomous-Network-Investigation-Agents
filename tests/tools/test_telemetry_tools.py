@@ -103,3 +103,48 @@ def test_right_after_the_failure_dark_modems_have_not_answered_the_poll(run_dir:
 
     assert data["offline_now"] == 166
     assert data["polled_now"] == 0
+
+
+def test_modem_health_says_how_old_the_rf_poll_is(run_dir: Path) -> None:
+    from datetime import timedelta
+
+    from netsleuth.sandbox.engine import DEFAULT_START
+    from netsleuth.storage import DuckDBStorage
+
+    # RF is polled every third tick, so at the failure tick the latest poll is from tick 18, when
+    # the modems behind the amplifier still answered.
+    at_failure = DEFAULT_START + timedelta(minutes=5 * FAULT_TICK)
+    with DuckDBStorage(run_dir).session("tools", at_failure) as session:
+        result = call_tool(session, "summarize_modem_health", {"scope_id": AMP})
+
+    assert result.data["offline_now"] == 166
+    assert result.data["rf_poll_minutes_ago"] == 10
+    assert "latest RF poll, taken 10 min ago" in result.summary
+
+
+def test_modem_health_names_the_device_above_every_weakened_modem(tmp_path: Path) -> None:
+    from netsleuth.eval import AmplifierFailureSpec, Case, simulate_case
+    from netsleuth.storage import DuckDBStorage
+
+    # A partial failure: nothing goes offline, so only the 4 dB drops can point at the amplifier.
+    case = Case(
+        case_id="sag",
+        ticks=30,
+        faults=[AmplifierFailureSpec(amp_id=AMP, at_tick=20, partial=True)],
+    )
+    sim = simulate_case(case, tmp_path / "d", tmp_path / "g")
+    # Tick 21 is the first RF poll after the sag, as when the detector raises it. The hour back
+    # is still mostly before the fault, so the drop shows against it.
+    with DuckDBStorage(tmp_path / "d").session("sag", sim.engine.time_of(21)) as session:
+        result = call_tool(session, "summarize_modem_health", {"scope_id": "node-hub1-04"})
+
+    assert result.data["offline_now"] == 0
+    assert result.data["dropped_root"] == AMP
+    assert f"all under {AMP}" in result.summary
+
+
+def test_modem_health_names_no_root_when_nothing_dropped(after: DuckDBSession) -> None:
+    result = call_tool(after, "summarize_modem_health", {"scope_id": "node-hub1-04"})
+
+    assert result.data["dropped_root"] is None
+    assert "all under" not in result.summary

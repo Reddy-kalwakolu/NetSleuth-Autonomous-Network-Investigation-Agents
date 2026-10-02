@@ -82,3 +82,32 @@ def test_the_prompt_carries_every_playbook_fact(
     (prompt,) = prompts
     assert "find_devices:" in prompt  # the fiber route check
     assert "get_subtree:" in prompt  # the amplifier check
+
+
+def test_the_single_prompt_records_its_prompt_version(
+    after: DuckDBSession, amp_anomaly: Mapping[str, Any]
+) -> None:
+    default = SinglePromptBaseline(ScriptedLLM(answer("amplifier_failure", AMP)))(
+        after, amp_anomaly
+    )
+    v1 = SinglePromptBaseline(
+        ScriptedLLM(answer("amplifier_failure", AMP)), prompt_version="investigation-v1"
+    )(after, amp_anomaly)
+
+    assert default.prompt_version == "investigation-v2"
+    assert v1.prompt_version == "investigation-v1"
+
+
+def test_a_real_device_missing_from_the_prompt_is_dropped(
+    after: DuckDBSession, amp_anomaly: Mapping[str, Any]
+) -> None:
+    from netsleuth.tools import inventory
+
+    unshown = "amp-hub1-node07-a1"
+    report = SinglePromptBaseline(ScriptedLLM(answer("amplifier_failure", unshown)))(
+        after, amp_anomaly
+    )
+
+    assert unshown in inventory(after).device_type
+    assert report.root_cause_category == "amplifier_failure"
+    assert report.root_cause_device_id is None

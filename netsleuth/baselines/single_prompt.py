@@ -10,10 +10,11 @@ from netsleuth.agents import (
     PLAYBOOKS,
     PROMPT_VERSION,
     InvestigationReport,
+    PromptVersion,
     gather_context,
     load_prompt,
 )
-from netsleuth.agents.context import render_blast, render_findings
+from netsleuth.agents.context import named_in, render_blast, render_findings
 from netsleuth.agents.schemas import SinglePromptAnswer
 from netsleuth.models import LLMError, StructuredLLM, Usage
 from netsleuth.storage import StorageSession
@@ -23,8 +24,15 @@ from netsleuth.tools import ToolError, call_tool, inventory
 class SinglePromptBaseline:
     name = "single-prompt"
 
-    def __init__(self, llm: StructuredLLM, *, confidence_threshold: float = 0.5) -> None:
+    def __init__(
+        self,
+        llm: StructuredLLM,
+        *,
+        confidence_threshold: float = 0.5,
+        prompt_version: PromptVersion = PROMPT_VERSION,
+    ) -> None:
         self.llm = llm
+        self.prompt_version = prompt_version
         self.confidence_threshold = confidence_threshold
         self.tool_calls = 0
 
@@ -44,7 +52,7 @@ class SinglePromptBaseline:
                     if result.query_ref not in seen:
                         context.findings.append(result)
                         seen.add(result.query_ref)
-            user = load_prompt("single_prompt").format(
+            user = load_prompt("single_prompt", self.prompt_version).format(
                 anomaly="\n".join(
                     f"- {k}: {anomaly.get(k)}"
                     for k in ("signal", "scope_device_id", "tick", "value", "baseline")
@@ -52,9 +60,8 @@ class SinglePromptBaseline:
                 findings=render_findings(context.findings),
                 blast=render_blast(context.blast),
             )
-            answer = self.llm.ask(
-                SinglePromptAnswer, load_prompt("system"), user, run_name="single prompt"
-            )
+            system = load_prompt("system", self.prompt_version)
+            answer = self.llm.ask(SinglePromptAnswer, system, user, run_name="single prompt")
         except (LLMError, ToolError) as error:
             return InvestigationReport(
                 incident_id=incident_id,
@@ -62,14 +69,15 @@ class SinglePromptBaseline:
                 root_cause_device_id=None,
                 confidence=0.0,
                 summary=f"The single prompt could not finish: {error}",
-                prompt_version=PROMPT_VERSION,
+                prompt_version=self.prompt_version,
             )
+        # The same rule as the agent: a real device, named in the prompt it was given.
         inv = inventory(session)
-        device = (
-            answer.device_id
-            if answer.device_id in inv.device_type or answer.device_id in inv.routes
-            else None
-        )
+        device = answer.device_id
+        if device is None or not (
+            (device in inv.device_type or device in inv.routes) and named_in(device, user)
+        ):
+            device = None
         unsure = answer.confidence < self.confidence_threshold
         return InvestigationReport(
             incident_id=incident_id,
@@ -77,5 +85,5 @@ class SinglePromptBaseline:
             root_cause_device_id=None if unsure else device,
             confidence=answer.confidence,
             summary=answer.summary,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=self.prompt_version,
         )

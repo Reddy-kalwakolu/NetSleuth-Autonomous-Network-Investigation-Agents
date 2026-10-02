@@ -52,9 +52,19 @@ PLAYBOOKS: dict[str, tuple[Check, ...]] = {
 }
 
 
+# Offered when no suspected cause has a playbook of its own, such as power, which has no data yet.
+# They tell the outage shapes apart: the whole route, the node's amplifier legs, and the node over
+# a longer window.
+GENERAL_CHECKS: tuple[Check, ...] = (
+    PLAYBOOKS["fiber_cut"][1],
+    PLAYBOOKS["amplifier_failure"][0],
+    PLAYBOOKS["amplifier_failure"][1],
+)
+
+
 def checks_for(categories: Iterable[str]) -> list[Check]:
     seen: dict[str, Check] = {}
     for category in categories:
         for check in PLAYBOOKS.get(category, ()):
             seen.setdefault(check.name, check)
-    return list(seen.values())
+    return list(seen.values()) or list(GENERAL_CHECKS)

@@ -24,6 +24,8 @@ DEFAULT_CONFIG_FILE = "netsleuth.yaml"
 
 TopologySize = Literal["dev", "eval", "scale"]
 StorageBackend = Literal["duckdb", "athena"]
+# Prompt folders under netsleuth/agents/prompts. The last one is the default.
+PromptVersion = Literal["investigation-v1", "investigation-v2"]
 
 
 class Settings(BaseSettings):
@@ -43,6 +45,7 @@ class Settings(BaseSettings):
     llm_output_usd_per_mtok: NonNegativeFloat | None = None
     max_tool_calls: PositiveInt = 8
     confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    prompt_version: PromptVersion = "investigation-v2"
     max_cost_usd_per_run: PositiveFloat = 2.0
     langsmith_project: str = "netsleuth"
     langsmith_tracing: bool = True

@@ -99,8 +99,19 @@ def summarize_modem_health(session: StorageSession, scope_id: str, hours: int = 
         (pl.col("before") - pl.col("ds_rx_power_dbmv")).alias("drop")
     )
     polled = set(now["modem_id"])
+    # RF is polled less often than status, so the poll can predate a failure the status shows.
+    poll_age_min = max(0, status_tick - polled_tick) * (60 // TICKS_PER_HOUR)
     silent_online = (modems - offline) - polled
     dropped = joined.filter(pl.col("drop") >= DROP_DB)
+    # The highest device every weakened modem sits under, among the modems that were polled: the
+    # same walk the blast radius does for dark modems, so a sag that takes nothing offline is
+    # still traced to a device.
+    dropped_ids = set(dropped["modem_id"])
+    dropped_root = (
+        inv.highest_fully_affected(dropped_ids, scope_id, set(joined["modem_id"]))
+        if dropped_ids
+        else None
+    )
     worst = joined.sort("drop", descending=True).head(5)["modem_id"].to_list()
     t3 = 0
     if "cm_events" in session.tables:
@@ -114,17 +125,20 @@ def summarize_modem_health(session: StorageSession, scope_id: str, hours: int = 
         "offline_now": len(offline),
         "offline_before": len(before),
         "polled_now": len(polled),
+        "rf_poll_minutes_ago": poll_age_min,
         "silent_but_online": len(silent_online),
         "t3_modems": t3,
         "dropped_4db": dropped.height,
+        "dropped_root": dropped_root,
         "median_ds_drop_db": round(median_drop, 2),
         "worst": worst,
     }
     summary = (
         f"{scope_id}: {len(offline)} of {len(modems)} modems offline now, {len(before)} "
-        f"{hours} h ago. {len(polled)} answered the latest RF poll. {dropped.height} lost 4 dB or "
-        f"more of downstream power (median change {median_drop:+.1f} dB). {t3} logged T3 in the "
-        "last hour."
+        f"{hours} h ago. {len(polled)} answered the latest RF poll, taken {poll_age_min} min ago. "
+        f"{dropped.height} lost 4 dB or more of downstream power"
+        + (f", all under {dropped_root}" if dropped_root else "")
+        + f" (median change {median_drop:+.1f} dB). {t3} logged T3 in the last hour."
     )
     return ToolResult(
         tool="summarize_modem_health",

@@ -96,3 +96,12 @@ def test_confidence_threshold_must_be_a_probability(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         load_settings(path)
+
+
+def test_prompt_version_defaults_to_the_latest_and_rejects_unknown_ones(tmp_path: Path) -> None:
+    assert Settings().prompt_version == "investigation-v2"
+    v1 = write_yaml(tmp_path / "v1.yaml", "prompt_version: investigation-v1\n")
+    assert load_settings(v1).prompt_version == "investigation-v1"
+
+    with pytest.raises(ValidationError):
+        load_settings(write_yaml(tmp_path / "bad.yaml", "prompt_version: investigation-v9\n"))

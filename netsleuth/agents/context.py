@@ -3,6 +3,7 @@
 Both run in code, so the agent and the single prompt baseline see exactly the same facts.
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -78,3 +79,10 @@ def render_findings(findings: list[ToolResult]) -> str:
 
 def render_blast(blast: Mapping[str, Any]) -> str:
     return "\n".join(f"- {k}: {v}" for k, v in blast.items())
+
+
+def named_in(device_id: str, text: str) -> bool:
+    """Whether ``device_id`` appears in ``text`` as a whole ID, not as part of a longer one."""
+    if not device_id:
+        return False
+    return re.search(rf"(?<![\w-]){re.escape(device_id)}(?![\w-])", text) is not None

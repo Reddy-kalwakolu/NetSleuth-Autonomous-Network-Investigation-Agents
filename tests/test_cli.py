@@ -241,3 +241,26 @@ def test_dotenv_file_is_loaded_but_never_overrides_the_shell(
 
     assert os.environ["OPENAI_API_KEY"] == "from-shell"
     assert os.environ["NETSLEUTH_MAX_COST_USD_PER_RUN"] == "5"
+
+
+def test_the_prompt_version_setting_reaches_both_llm_systems(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from netsleuth import cli
+    from netsleuth.agents import InvestigationAgent
+    from netsleuth.baselines import SinglePromptBaseline
+    from netsleuth.config import Settings
+    from netsleuth.models import ScriptedLLM
+    from tests.support import oracle
+
+    monkeypatch.setattr(cli, "build_llm", lambda settings: ScriptedLLM(oracle("unknown", None)))
+    settings = Settings(
+        llm_input_usd_per_mtok=1, llm_output_usd_per_mtok=1, prompt_version="investigation-v1"
+    )
+
+    agent = cli.build_system("agent", settings)
+    single = cli.build_system("single-prompt", settings)
+
+    assert isinstance(agent, InvestigationAgent)
+    assert isinstance(single, SinglePromptBaseline)
+    assert agent.prompt_version == single.prompt_version == "investigation-v1"

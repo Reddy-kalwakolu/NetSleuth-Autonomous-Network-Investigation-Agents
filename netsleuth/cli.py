@@ -80,11 +80,16 @@ def build_system(name: str, settings: Settings) -> System:
             "set llm_input_usd_per_mtok and llm_output_usd_per_mtok, so the run budget can work"
         )
     if name == "single-prompt":
-        return SinglePromptBaseline(llm, confidence_threshold=settings.confidence_threshold)
+        return SinglePromptBaseline(
+            llm,
+            confidence_threshold=settings.confidence_threshold,
+            prompt_version=settings.prompt_version,
+        )
     return InvestigationAgent(
         llm,
         max_tool_calls=settings.max_tool_calls,
         confidence_threshold=settings.confidence_threshold,
+        prompt_version=settings.prompt_version,
     )
 
 
