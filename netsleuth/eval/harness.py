@@ -6,20 +6,29 @@ anomaly's detection time. Only the harness reads the ground truth.
 
 Until the incident grouper exists, a fault claims every anomaly on the nodes it sits on or spans
 (and every node in their service groups), from its start until its effects end or the next fault
-there starts, whichever comes first. The
-earliest claimed anomaly is diagnosed, and claimed anomalies never count as false alarms.
+there starts, whichever comes first. The earliest claimed anomaly is diagnosed, and claimed
+anomalies never count as false alarms.
+
+Systems that call an LLM expose ``usage`` (a ``Usage``) and ``tool_calls``. The harness records
+what each case spent, prices it, stops a run once its budget is spent, and runs every diagnosis
+inside a LangSmith tracing context tagged with the system and the case.
 """
 
 import json
+import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from langsmith import tracing_context
+
+from netsleuth.config import Settings
 from netsleuth.detector import detect_anomalies
 from netsleuth.diagnosis import Diagnosis
 from netsleuth.eval.cases import Case, simulate_case
 from netsleuth.eval.metrics import category_score, location_score, route_location_score
+from netsleuth.models import Usage
 from netsleuth.sandbox.topology import Node, ServiceGroup, Topology
 from netsleuth.storage import DuckDBStorage, RunWriter, StorageSession
 
@@ -39,11 +48,45 @@ class FaultScore:
 
 
 @dataclass(frozen=True)
+class CaseUsage:
+    calls: int
+    input_tokens: int
+    output_tokens: int
+    tool_calls: int
+    cost_usd: float | None
+
+
+@dataclass(frozen=True)
 class CaseResult:
     case_id: str
     system: str
     faults: tuple[FaultScore, ...]
     false_alarms: int
+    usage: CaseUsage | None = None
+
+
+@dataclass(frozen=True)
+class Pricing:
+    input_usd_per_mtok: float
+    output_usd_per_mtok: float
+
+
+@dataclass(frozen=True)
+class Tracing:
+    project: str
+
+
+def tracing_from_env(settings: Settings) -> Tracing | None:
+    """Trace to LangSmith only when it is switched on and a key is set."""
+    if settings.langsmith_tracing and os.environ.get("LANGSMITH_API_KEY"):
+        return Tracing(project=settings.langsmith_project)
+    return None
+
+
+class BudgetExceeded(RuntimeError):
+    def __init__(self, spent: float, limit: float, results: list[CaseResult]) -> None:
+        super().__init__(f"spent ${spent:.4f} of a ${limit:.2f} run budget; stopped")
+        self.results = results
 
 
 def run_case(
@@ -52,7 +95,18 @@ def run_case(
     data_dir: Path,
     ground_truth_dir: Path,
     system_name: str | None = None,
+    *,
+    pricing: Pricing | None = None,
+    tracing: Tracing | None = None,
 ) -> CaseResult:
+    name = (
+        system_name
+        or getattr(system, "name", None)
+        or getattr(system, "__name__", "system").removesuffix("_baseline")
+    )
+    metered = getattr(system, "usage", None)
+    usage_before = metered.copy() if isinstance(metered, Usage) else None
+    tool_calls_before = int(getattr(system, "tool_calls", 0))
     sim = simulate_case(case, data_dir, ground_truth_dir)
     storage = DuckDBStorage(data_dir)
 
@@ -89,7 +143,21 @@ def run_case(
             continue
         claimed.update(r["anomaly_id"] for r in mine)
         first = mine[0]
-        with storage.session(sim.run_id, first["ts"]) as session:
+        trace = (
+            tracing_context(
+                enabled=True,
+                project_name=tracing.project,
+                tags=[name, case.case_id],
+                metadata={
+                    "case_id": case.case_id,
+                    "anomaly_id": first["anomaly_id"],
+                    "system": name,
+                },
+            )
+            if tracing is not None
+            else tracing_context(enabled=False)
+        )
+        with storage.session(sim.run_id, first["ts"]) as session, trace:
             diagnosis = system(session, first)
         if fault["graded_level"] == "fiber_route":
             where = route_location_score(
@@ -111,13 +179,62 @@ def run_case(
         )
     scores = [scores_by_id[f["fault_id"]] for f in truth["faults"]]
 
-    name = system_name or system.__name__.removesuffix("_baseline")
+    case_usage = None
+    if usage_before is not None and isinstance(metered, Usage):
+        spent = metered.minus(usage_before)
+        case_usage = CaseUsage(
+            calls=spent.calls,
+            input_tokens=spent.input_tokens,
+            output_tokens=spent.output_tokens,
+            tool_calls=int(getattr(system, "tool_calls", 0)) - tool_calls_before,
+            cost_usd=(
+                spent.cost_usd(pricing.input_usd_per_mtok, pricing.output_usd_per_mtok)
+                if pricing is not None
+                else None
+            ),
+        )
     return CaseResult(
         case_id=case.case_id,
         system=name,
         faults=tuple(scores),
         false_alarms=anomalies.height - len(claimed),
+        usage=case_usage,
     )
+
+
+def run_cases(
+    cases: Sequence[Case],
+    system: System,
+    data_dir: Path,
+    ground_truth_dir: Path,
+    *,
+    system_name: str | None = None,
+    pricing: Pricing | None = None,
+    tracing: Tracing | None = None,
+    max_cost_usd: float | None = None,
+    on_case: Callable[[Case], None] | None = None,
+) -> list[CaseResult]:
+    """Run cases in order, stopping after the case that takes spend past ``max_cost_usd``."""
+    results: list[CaseResult] = []
+    spent = 0.0
+    for case in cases:
+        if on_case is not None:
+            on_case(case)
+        result = run_case(
+            case,
+            system,
+            data_dir,
+            ground_truth_dir,
+            system_name,
+            pricing=pricing,
+            tracing=tracing,
+        )
+        results.append(result)
+        if result.usage is not None and result.usage.cost_usd is not None:
+            spent += result.usage.cost_usd
+        if max_cost_usd is not None and spent > max_cost_usd:
+            raise BudgetExceeded(spent, max_cost_usd, results)
+    return results
 
 
 def format_scores(results: Sequence[CaseResult]) -> str:
@@ -138,6 +255,13 @@ def format_scores(results: Sequence[CaseResult]) -> str:
                 f"category {s.category_score:.2f}  location {s.location_score:.2f}"
             )
         lines.append(f"  false alarms {result.false_alarms}")
+        if result.usage is not None:
+            u = result.usage
+            cost = f", ${u.cost_usd:.4f}" if u.cost_usd is not None else ""
+            lines.append(
+                f"  usage: {u.calls} calls, {u.input_tokens} in / {u.output_tokens} out tokens, "
+                f"{u.tool_calls} tool calls{cost}"
+            )
     if all_scores:
         n = len(all_scores)
         lines.append(
@@ -146,6 +270,15 @@ def format_scores(results: Sequence[CaseResult]) -> str:
             f"location {sum(s.location_score for s in all_scores) / n:.2f}, "
             f"false alarms {sum(r.false_alarms for r in results)}"
         )
+        costs = [
+            r.usage.cost_usd
+            for r in results
+            if r.usage is not None and r.usage.cost_usd is not None
+        ]
+        if costs:
+            detected = sum(s.detected for s in all_scores)
+            per = f" (${sum(costs) / detected:.4f} per detected incident)" if detected else ""
+            lines[-1] += f", cost ${sum(costs):.4f}{per}"
     return "\n".join(lines)
 
 

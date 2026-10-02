@@ -13,12 +13,18 @@ from netsleuth.eval.cases import (
     simulate_case,
 )
 from netsleuth.eval.harness import (
+    BudgetExceeded,
     CaseResult,
+    CaseUsage,
     FaultScore,
+    Pricing,
     System,
+    Tracing,
     fault_scopes,
     format_scores,
     run_case,
+    run_cases,
+    tracing_from_env,
 )
 from netsleuth.eval.metrics import (
     category_score,
@@ -30,17 +36,21 @@ from netsleuth.eval.scenarios import ScenarioError, load_case
 
 __all__ = [
     "AmplifierFailureSpec",
+    "BudgetExceeded",
     "Case",
     "CaseResult",
+    "CaseUsage",
     "CustomFaultSpec",
     "FaultScore",
     "FaultSpec",
     "FiberCutSpec",
     "IngressNoiseSpec",
     "PlannedMaintenanceSpec",
+    "Pricing",
     "ScenarioError",
     "SimulatedRun",
     "System",
+    "Tracing",
     "build_fault",
     "category_score",
     "fault_scopes",
@@ -49,6 +59,8 @@ __all__ = [
     "location_score",
     "route_location_score",
     "run_case",
+    "run_cases",
     "simulate_case",
+    "tracing_from_env",
     "tree_distance",
 ]
