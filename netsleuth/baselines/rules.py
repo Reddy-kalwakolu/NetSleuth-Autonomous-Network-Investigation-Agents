@@ -18,9 +18,7 @@ looks exactly like a failure of A, and the rules blame A. Partial location credi
 and the amplifiers that report their own telemetry can break the tie later.
 """
 
-from collections import defaultdict
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -28,6 +26,8 @@ import polars as pl
 
 from netsleuth.diagnosis import Diagnosis, DiagnosisCategory
 from netsleuth.storage import StorageSession
+from netsleuth.tools.inventory import Inventory, offline_now
+from netsleuth.tools.inventory import inventory as load_inventory
 
 CATEGORY_BY_DEVICE_TYPE: dict[str, DiagnosisCategory] = {
     "amplifier": "amplifier_failure",
@@ -40,55 +40,11 @@ RF_POLL_TICKS = 3
 T3_WINDOW_TICKS = 12
 
 
-@dataclass
-class _Inventory:
-    parent: dict[str, str | None]
-    device_type: dict[str, str]
-    fiber_route: dict[str, str | None]
-    children: dict[str, list[str]] = field(default_factory=lambda: defaultdict(list))
-    _modems: dict[str, frozenset[str]] = field(default_factory=dict)
-
-    @classmethod
-    def load(cls, session: StorageSession) -> "_Inventory":
-        rows = session.query(
-            "SELECT device_id, device_type, parent_id, fiber_route FROM topology_devices"
-        )
-        inventory = cls(
-            parent=dict(zip(rows["device_id"], rows["parent_id"], strict=True)),
-            device_type=dict(zip(rows["device_id"], rows["device_type"], strict=True)),
-            fiber_route=dict(zip(rows["device_id"], rows["fiber_route"], strict=True)),
-        )
-        for device_id, parent_id in inventory.parent.items():
-            if parent_id is not None:
-                inventory.children[parent_id].append(device_id)
-        return inventory
-
-    def modems_under(self, device_id: str) -> frozenset[str]:
-        if device_id not in self._modems:
-            if self.device_type[device_id] == "modem":
-                found = frozenset({device_id})
-            else:
-                found = frozenset().union(*(self.modems_under(c) for c in self.children[device_id]))
-            self._modems[device_id] = found
-        return self._modems[device_id]
-
-    def highest_fully_affected(self, affected: set[str], ceiling: str, universe: set[str]) -> str:
-        """Walk up from the common ancestor of ``affected`` while every modem (among
-        ``universe``) under the next device up is affected too, stopping at ``ceiling``."""
-        root = _lowest_common_ancestor(affected, self.parent)
-        while root != ceiling:
-            up = self.parent[root]
-            if up is None or not (self.modems_under(up) & universe) <= affected:
-                break
-            root = up
-        return root
-
-
 def rules_baseline(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagnosis:
     incident_id = str(anomaly["anomaly_id"])
     scope = str(anomaly["scope_device_id"])
     signal = str(anomaly.get("signal", "share_offline"))
-    inventory = _Inventory.load(session)
+    inventory = load_inventory(session)
     if inventory.device_type[scope] == "node":
         node_ids = [scope]
     else:
@@ -135,14 +91,9 @@ def _active_window(
 
 
 def _outage(
-    session: StorageSession, inventory: _Inventory, incident_id: str, node_id: str
+    session: StorageSession, inventory: Inventory, incident_id: str, node_id: str
 ) -> Diagnosis:
-    offline = set(
-        session.query(
-            "SELECT modem_id FROM cm_status "
-            "WHERE ts = (SELECT max(ts) FROM cm_status) AND NOT online"
-        )["modem_id"]
-    )
+    offline = offline_now(session)
     dark = offline & inventory.modems_under(node_id)
     if not dark:
         return Diagnosis(
@@ -181,7 +132,7 @@ def _outage(
 
 
 def _ingress(
-    session: StorageSession, inventory: _Inventory, incident_id: str, node_ids: list[str]
+    session: StorageSession, inventory: Inventory, incident_id: str, node_ids: list[str]
 ) -> Diagnosis:
     counts = dict.fromkeys(node_ids, 0)
     if "cm_events" in session.tables:
@@ -201,7 +152,7 @@ def _ingress(
 
 
 def _partial(
-    session: StorageSession, inventory: _Inventory, incident_id: str, node_id: str
+    session: StorageSession, inventory: Inventory, incident_id: str, node_id: str
 ) -> Diagnosis:
     lookback = RF_POLL_TICKS * (RF_BASELINE_POLLS + 1)
     rf = session.query(
@@ -237,17 +188,3 @@ def _partial(
         affected_device_ids=tuple(sorted(dropped)),
         summary=f"Downstream power fell 4 dB or more on every polled modem behind {root}.",
     )
-
-
-def _lowest_common_ancestor(devices: set[str], parent: Mapping[str, str | None]) -> str:
-    def chain(device_id: str) -> list[str]:
-        path = [device_id]
-        while (up := parent[path[-1]]) is not None:
-            path.append(up)
-        return path
-
-    first, *rest = devices
-    shared = set(chain(first))
-    for device_id in rest:
-        shared &= set(chain(device_id))
-    return next(d for d in chain(first) if d in shared)
