@@ -344,7 +344,7 @@ All tools are read only, and each returns a short summary plus a `query_ref` han
 | `get_tickets`, `get_power_events`, `get_power_supply_status` | Customer impact, utility outages, battery state |
 | `get_peering_status`, `get_sg_utilization` | Capacity |
 
-The tools are plain Python functions first (week 2), then wrapped by an MCP server (week 3). The graph reaches them through `langchain-mcp-adapters`:
+The tools are plain Python functions first (milestone 2), then wrapped by an MCP server (milestone 3). Each one takes the storage session and its own arguments, and returns a short summary, the data behind it, and a `query_ref` that reruns it exactly. Built so far: `get_anomaly`, `get_device`, `get_ancestors`, `get_subtree`, `find_devices` (by fiber route, power area, model, firmware or line card), `summarize_modem_health` (on a device or a whole fiber route, including modems that went silent), `get_metric_series` (which reports how long a device has been silent), `get_cm_events`, `get_service_group_health` and `get_maintenance_windows`. The rest wait for their data: `get_flap_list`, `get_alarms`, `get_recent_changes`, `get_tickets`, `get_power_events`, `get_power_supply_status` and `get_peering_status`. The graph reaches them through `langchain-mcp-adapters`:
 
 * **stdio** in tests and local runs, where the agent starts the server as a subprocess.
 * **Streamable HTTP** in docker compose, where the server runs in its own container.
@@ -358,6 +358,8 @@ Every agent is a LangGraph graph with typed Pydantic state, versioned prompts in
 ### 10.1 Model layer
 
 Models come through LangChain chat models, chosen by config. The main model is an OpenAI GPT model through `ChatOpenAI`, and `ChatAnthropic` and `ChatBedrockConverse` (the AWS native path) stay configured as backends I can switch to. Typed outputs use `with_structured_output` with Pydantic schemas, and prompt caching is used where the provider supports it. Switching providers is a config change, not a code change. Whichever model runs the final holdout and novel sets is fixed for those runs and named in the evaluation report, because scores from different models are not comparable.
+
+Every LLM call goes through one small interface, `StructuredLLM`, which asks for a typed answer and counts tokens. `LangChainLLM` wraps the configured chat model for real runs and turns any provider failure into one error type. `ScriptedLLM` answers from a function for tests and CI, so no test ever calls a paid API. API keys only ever come from environment variables.
 
 ### 10.2 Investigation agent
 
@@ -388,6 +390,8 @@ Models come through LangChain chat models, chosen by config. The main model is a
 Categories: `amplifier_failure`, `ingress_noise`, `fiber_cut`, `power_supply_failure`, `config_change`, `planned_maintenance`, `peering_congestion`, `commercial_power_outage`, `capacity_congestion`, `unknown` and `insufficient_evidence`.
 
 Confidence is calibrated on dev results with a reliability plot. It is not the model's own guess.
+
+**Version 1 (milestone 2).** The prechecks and blast radius run as one code step, shared with the single prompt baseline so both see the same facts. Decide and report run as one code step, because decide has no branch of its own yet. The checks the model can pick come from a playbook per suspected cause, defined in code. A device the model names is kept only if it is in the stored inventory or is a fiber route, and evidence is kept only if it cites a fact the agent actually saw. Until calibration lands in milestone 5, confidence is the model's own score, compared with `confidence_threshold` from the settings, and the tool call cap is `max_tool_calls`. Prompts live in versioned folders, and every report records its prompt version. If an LLM call or a tool fails, that diagnosis comes back as insufficient evidence with the reason, and the evaluation carries on.
 
 ### 10.3 Recommendation agent
 
@@ -450,7 +454,7 @@ The target is at least 60 cases by week 3, growing toward 100. The holdout and n
 ### 12.2 Baselines
 
 * **Rules engine:** plain decision logic over the same data, built to be strong and frozen after the first holdout run. It checks, in this order: an active maintenance window on the node (planned maintenance); for an outage, the rule field engineers use, finding the highest device whose entire downstream is dark from the lowest common ancestor of the offline modems, and calling a route cut when another node on the same fiber route is fully dark too; for upstream noise, ingress at the node with the most modems logging T3 timeouts in the last hour; and for an RF level drop, the outage rule applied to the modems whose power fell, which pins a partial amplifier failure. It has one known blind spot. If an amplifier has no taps of its own and feeds only one other amplifier, a failure of the second looks exactly like a failure of the first, and the rules blame the first. That pattern shows up in about one amplifier in 65, in roughly one network in seven.
-* **Single prompt:** one LLM call with the same prefetched context and no graph.
+* **Single prompt:** one LLM call with the same prefetched context and no graph. It gets the prechecks, the blast radius, and the result of every playbook check, so it sees at least everything the agent could reach.
 
 Every results table shows the agent next to both.
 
@@ -524,7 +528,9 @@ Business metrics are derived from evaluation results, labeled as simulated: truc
 
 ### 14.2 Configuration
 
-Settings load in three layers, highest priority first: `NETSLEUTH_*` environment variables, a YAML file (passed in, or `netsleuth.yaml` in the working directory), then defaults in code. Unknown keys and invalid values are rejected. Today's settings are `seed`, `topology_size`, `tick_minutes`, `storage_backend`, `data_dir` and `ground_truth_dir`. Model provider, model ID and tool call caps join them in week 2.
+Settings load in three layers, highest priority first: `NETSLEUTH_*` environment variables, a YAML file (passed in, or `netsleuth.yaml` in the working directory), then defaults in code. Unknown keys and invalid values are rejected. Settings cover the simulation (`seed`, `topology_size`, `tick_minutes`), storage (`storage_backend`, `data_dir`, `ground_truth_dir`), the model (`llm_provider`, `llm_model`, and its prices `llm_input_usd_per_mtok` and `llm_output_usd_per_mtok`), the agent (`max_tool_calls`, `confidence_threshold`), spend (`max_cost_usd_per_run`) and tracing (`langsmith_project`, `langsmith_tracing`). Keys are never settings: they come only from environment variables.
+
+**Cost.** The harness records each case's LLM calls, tokens and tool calls, prices them from the settings, and stops a run once it has spent `max_cost_usd_per_run`. Every diagnosis runs inside a LangSmith tracing context tagged with the system and the case, and tracing is off unless it is switched on and `LANGSMITH_API_KEY` is set.
 
 ### 14.3 Repository layout
 
@@ -638,6 +644,8 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | D-30 | The `dev` network keeps two nodes per service group | One node per service group, as the `eval` network has | Two nodes make upstream noise ambiguous between neighbours, as it is in real plants. Regenerating `dev` would also change every scenario's device IDs |
 | D-31 | Counts and events draw from their own random stream | One stream for everything | How many random numbers a Poisson draw uses depends on its rate, so one stream would let a fault shift the noise on every unrelated level after it |
 | D-32 | An OpenAI GPT model is the main model, with Anthropic and Bedrock kept as switchable backends | Anthropic first as in D-21, or one provider only | I already have OpenAI API credits, which keeps LLM spend near zero and leaves the monthly budget for AWS. The agent stays model agnostic behind LangChain chat models, and Bedrock keeps the AWS native path |
+| D-33 | One `StructuredLLM` interface with a scripted implementation for tests | LangChain's fake chat models | Structured output support in the fake models varies across versions, and a scripted answer makes tests and CI deterministic and free |
+| D-34 | The harness meters usage and stops a run at `max_cost_usd_per_run` | Watching spend in the provider's console | A console shows the bill afterwards; only the harness can stop a run before it overspends the monthly budget |
 
 ## 18. Open questions
 

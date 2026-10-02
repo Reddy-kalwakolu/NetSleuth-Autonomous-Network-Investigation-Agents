@@ -247,6 +247,21 @@ case f3-route-cut  [rules]
 
 Scenario files live in [`scenarios/dev`](scenarios/dev), and each one says what it tests. Run the tests with `uv run pytest`.
 
+To run the investigation agent or the single prompt baseline you need an OpenAI API key and, for tracing, a LangSmith key, both as environment variables (`OPENAI_API_KEY`, `LANGSMITH_API_KEY`). Set the model and its prices in `netsleuth.yaml`, which stays on your machine:
+
+```yaml
+llm_model: <an OpenAI model name>
+llm_input_usd_per_mtok: <price per million input tokens>
+llm_output_usd_per_mtok: <price per million output tokens>
+max_cost_usd_per_run: 2.0
+```
+
+```bash
+uv run netsleuth run scenarios/dev/*.yaml --system agent
+```
+
+Each case then also prints its token use, tool calls and cost, and the run stops once it has spent `max_cost_usd_per_run`.
+
 ## Milestones
 
 I'm building this in eight milestones.

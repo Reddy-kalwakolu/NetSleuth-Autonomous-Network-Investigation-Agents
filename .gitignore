@@ -7,3 +7,4 @@ __pycache__/
 .ruff_cache/
 data/
 ground_truth/
+netsleuth.yaml
