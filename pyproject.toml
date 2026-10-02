@@ -62,3 +62,7 @@ files = ["netsleuth", "tests"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[[tool.mypy.overrides]]
+module = ["langchain_anthropic.*", "langchain_aws.*"]
+ignore_missing_imports = true
