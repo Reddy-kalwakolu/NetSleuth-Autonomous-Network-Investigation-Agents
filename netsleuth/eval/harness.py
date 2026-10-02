@@ -298,7 +298,8 @@ def format_scores(results: Sequence[CaseResult]) -> str:
 def fault_scopes(topology: Topology, root_device_id: str) -> set[str]:
     """Nodes a fault sits on or spans, their service groups, and every node in those service
     groups. Upstream trouble hurts a whole service group, so a sibling node's anomaly belongs to
-    the same fault."""
+    the same fault. A fault whose answer touches no node, such as trouble on a peering link,
+    claims nothing: it can be missed, but never takes another fault's anomalies."""
     if root_device_id in topology:
         nodes = _nodes_affected_by(topology, root_device_id)
     else:  # a fiber route
@@ -310,8 +311,7 @@ def fault_scopes(topology: Topology, root_device_id: str) -> set[str]:
 
 def _nodes_affected_by(topology: Topology, device_id: str) -> set[str]:
     """The node a device sits in; for a device above the nodes, every node beneath it; for a power
-    supply, the nodes holding what it feeds. A device with none of these, such as a peering
-    link, can touch the whole network."""
+    supply, the nodes holding what it feeds. None for a device with none of these."""
     device = topology[device_id]
     if isinstance(device, Node):
         return {device_id}
@@ -320,8 +320,7 @@ def _nodes_affected_by(topology: Topology, device_id: str) -> set[str]:
         return {above[0]}
     if isinstance(device, PowerSupply):
         return set().union(*(_nodes_affected_by(topology, active) for active in device.feeds))
-    below = {d.device_id for d in topology.subtree(device_id) if isinstance(d, Node)}
-    return below or {n.device_id for n in topology.of_type(Node)}
+    return {d.device_id for d in topology.subtree(device_id) if isinstance(d, Node)}
 
 
 def _missed(fault: Mapping[str, Any]) -> FaultScore:

@@ -238,12 +238,38 @@ def test_a_power_supply_claims_the_nodes_it_feeds(topo: Topology) -> None:
     assert fed_nodes <= fault_scopes(topo, supply.device_id)
 
 
-def test_a_device_with_no_node_near_it_claims_the_whole_network(topo: Topology) -> None:
+def test_a_device_with_no_node_near_it_claims_nothing(topo: Topology) -> None:
     from netsleuth.sandbox.topology.models import PeeringLink
 
-    link = topo.of_type(PeeringLink)[0]
+    assert fault_scopes(topo, topo.of_type(PeeringLink)[0].device_id) == set()
 
-    assert {n.device_id for n in topo.of_type(Node)} <= fault_scopes(topo, link.device_id)
+
+def test_an_invisible_fault_does_not_swallow_a_real_one(topo: Topology, tmp_path: Path) -> None:
+    from netsleuth.sandbox.topology.models import PeeringLink
+
+    link = topo.of_type(PeeringLink)[0].device_id
+    case = Case(
+        case_id="invisible",
+        ticks=40,
+        faults=[
+            CustomFaultSpec(
+                category="peering_congestion",
+                root_device_id=link,
+                graded_level="node",
+                correct_action=CorrectAction(action="no_action", target=None),
+                effects=(ScheduledEffect(at_tick=5, effect=TakeDown(device_id=link)),),
+            ),
+            AmplifierFailureSpec(amp_id="amp-hub1-node04-a1", at_tick=20),
+        ],
+    )
+
+    result = run_case(
+        case, answer("amplifier_failure", "amp-hub1-node04-a1"), tmp_path / "d", tmp_path / "g"
+    )
+
+    invisible, amp = result.faults
+    assert not invisible.detected
+    assert amp.detected and amp.location_score == 1.0
 
 
 def test_location_outside_the_tree_scores_exact_or_nothing(topo: Topology) -> None:
