@@ -397,6 +397,19 @@ Confidence is calibrated on dev results with a reliability plot. It is not the m
 
 On the dev set with `gpt-5.4-mini`, version 2 raised the agent's location score from 0.70 to 0.90 but dropped its category score from 0.80 to 0.70, and moved the single prompt from 0.80 and 0.78 to 0.80 and 0.88. The traces showed why the agent lost category: the score step was told that a cause no fact can confirm scores low, and since a fiber cut only shows as silence, it answered `unknown` on both cuts while naming the right place. Version 3 removes that line.
 
+**Prompt version 3.** Version 3 drops that line, says that `unknown` means a fault none of the other causes fits rather than a way to say I am unsure, and says that fiber and plant equipment show their failure only as silence. On the same dev set:
+
+| System | Category | Location | Cost per incident |
+|---|---|---|---|
+| Rules | 1.00 | 0.97 | free |
+| Single prompt v1 | 0.80 | 0.78 | $0.0014 |
+| Single prompt v3 | 0.80 | 0.97 | $0.0019 |
+| Agent v1 | 0.80 | 0.70 | $0.0079 |
+| Agent v2 | 0.70 | 0.90 | $0.0100 |
+| Agent v3 | 0.80 | 0.95 | $0.0110 |
+
+Both LLM systems still call the node cut `unknown` and the partial amplifier `ingress_noise`, each at the right device. On these ten faults the agent does not beat the single prompt, which costs a sixth as much. Ten faults are too few to tune against any further, so I stop prompt work here and let the holdout set in milestone 2c decide whether the graph earns its cost.
+
 ### 10.3 Recommendation agent
 
 Maps the report to candidate actions from a runbook table, where each row has the action, preconditions, risk level and typical time to effect. The model picks one and explains why. The output is a `ProposedAction` with action, target, parameters, reasoning, risk and expected outcome. Only low risk actions, such as `monitor` and `route_to_team`, can skip approval.

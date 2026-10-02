@@ -148,3 +148,9 @@ def test_modem_health_names_no_root_when_nothing_dropped(after: DuckDBSession) -
 
     assert result.data["dropped_root"] is None
     assert "all under" not in result.summary
+
+
+def test_modem_health_says_plainly_how_many_were_offline_before(before: DuckDBSession) -> None:
+    summary = call_tool(before, "summarize_modem_health", {"scope_id": "node-hub1-04"}).summary
+
+    assert "modems offline now, 0 were offline 1 h ago." in summary

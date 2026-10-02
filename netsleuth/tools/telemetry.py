@@ -135,7 +135,8 @@ def summarize_modem_health(session: StorageSession, scope_id: str, hours: int = 
     }
     summary = (
         f"{scope_id}: {len(offline)} of {len(modems)} modems offline now, {len(before)} "
-        f"{hours} h ago. {len(polled)} answered the latest RF poll, taken {poll_age_min} min ago. "
+        f"were offline {hours} h ago. {len(polled)} answered the latest RF poll, taken "
+        f"{poll_age_min} min ago. "
         f"{dropped.height} lost 4 dB or more of downstream power"
         + (f", all under {dropped_root}" if dropped_root else "")
         + f" (median change {median_drop:+.1f} dB). {t3} logged T3 in the last hour."

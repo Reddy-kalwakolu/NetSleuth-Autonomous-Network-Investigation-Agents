@@ -40,7 +40,7 @@ def test_agent_reports_the_scripted_answer_with_rerunnable_evidence(
     assert report.evidence
     for item in report.evidence:
         assert rerun(after, item.query_ref).summary.startswith(item.claim[:20])
-    assert report.prompt_version == "investigation-v2"
+    assert report.prompt_version == "investigation-v3"
 
 
 def test_an_invented_device_is_dropped(

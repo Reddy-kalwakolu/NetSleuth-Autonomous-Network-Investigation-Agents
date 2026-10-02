@@ -75,12 +75,12 @@ def test_every_playbook_check_runs_for_a_real_scope(
 
 
 def test_prompts_are_versioned_and_load() -> None:
-    assert PROMPT_VERSION == "investigation-v2"
-    assert PROMPT_VERSIONS == ("investigation-v1", "investigation-v2")
+    assert PROMPT_VERSION == "investigation-v3"
+    assert PROMPT_VERSIONS == ("investigation-v1", "investigation-v2", "investigation-v3")
     for version in PROMPT_VERSIONS:
         for name in ("system", "hypothesize", "gather", "score", "single_prompt"):
             assert len(load_prompt(name, version)) > 100, (version, name)
-    assert load_prompt("system", "investigation-v1") != load_prompt("system", "investigation-v2")
+    assert len({load_prompt("system", v) for v in PROMPT_VERSIONS}) == len(PROMPT_VERSIONS)
 
 
 def test_an_unknown_prompt_version_is_refused() -> None:

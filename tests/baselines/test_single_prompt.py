@@ -94,7 +94,7 @@ def test_the_single_prompt_records_its_prompt_version(
         ScriptedLLM(answer("amplifier_failure", AMP)), prompt_version="investigation-v1"
     )(after, amp_anomaly)
 
-    assert default.prompt_version == "investigation-v2"
+    assert default.prompt_version == "investigation-v3"
     assert v1.prompt_version == "investigation-v1"
 
 
