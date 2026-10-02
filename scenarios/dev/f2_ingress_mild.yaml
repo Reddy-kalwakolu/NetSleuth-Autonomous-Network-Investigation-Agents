@@ -1,0 +1,13 @@
+# A milder noise problem on node 06 in the evening, 8 dB instead of 10. Its service group
+# partner node 05 shares the upstream and sees some of the damage.
+case_id: f2-ingress-mild
+topology_seed: 0
+seed: 18
+ticks: 288
+faults:
+  - kind: ingress_noise
+    node_id: node-hub1-06
+    at_tick: 0
+    snr_drop_db: 8
+    start_hour: 17
+    end_hour: 23

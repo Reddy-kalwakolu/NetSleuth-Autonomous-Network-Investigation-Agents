@@ -1,0 +1,11 @@
+# An amplifier fails in the larger two hub network, on node 04 of the second hub. It checks
+# that nothing depends on the small dev network or its device names.
+case_id: f1-eval-network
+topology_size: eval
+topology_seed: 41
+seed: 14
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub2-node04-a12
+    at_tick: 20

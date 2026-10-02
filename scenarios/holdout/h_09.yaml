@@ -1,0 +1,13 @@
+# Two unrelated failures in different hubs, one after the other.
+case_id: h-09
+topology_size: eval
+topology_seed: 8
+seed: 19
+ticks: 90
+faults:
+- kind: amplifier_failure
+  amp_id: amp-hub1-node03-a2
+  at_tick: 20
+- kind: fiber_cut
+  node_id: node-hub2-09
+  at_tick: 45

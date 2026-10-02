@@ -1,0 +1,55 @@
+# A plant power supply's output sags; every active it feeds runs short of voltage,
+# across more than one leg of the node.
+case_id: n-06
+topology_size: eval
+topology_seed: 29
+seed: 26
+ticks: 64
+faults:
+- kind: custom
+  category: power_supply_failure
+  root_device_id: ps-hub1-node03-2
+  graded_level: power_supply
+  correct_action:
+    action: dispatch_tech
+    target: ps-hub1-node03-2
+    params:
+      work_type: power_supply_repair
+  effects:
+  - at_tick: 25
+    effect:
+      kind: degrade_levels
+      scope_id: amp-hub1-node03-a6
+      ds_db: -2.5
+      us_db: 2.5
+  - at_tick: 25
+    effect:
+      kind: degrade_levels
+      scope_id: amp-hub1-node03-a7
+      ds_db: -2.5
+      us_db: 2.5
+  - at_tick: 25
+    effect:
+      kind: degrade_levels
+      scope_id: amp-hub1-node03-a8
+      ds_db: -2.5
+      us_db: 2.5
+  - at_tick: 25
+    effect:
+      kind: degrade_levels
+      scope_id: amp-hub1-node03-a9
+      ds_db: -2.5
+      us_db: 2.5
+  - at_tick: 25
+    effect:
+      kind: degrade_levels
+      scope_id: amp-hub1-node03-a10
+      ds_db: -2.5
+      us_db: 2.5
+  - at_tick: 25
+    effect:
+      kind: degrade_levels
+      scope_id: amp-hub1-node03-a11
+      ds_db: -2.5
+      us_db: 2.5
+  variant: brownout

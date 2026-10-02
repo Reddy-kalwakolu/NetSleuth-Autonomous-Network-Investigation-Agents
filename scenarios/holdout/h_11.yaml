@@ -1,0 +1,13 @@
+# Two problems in different hubs during the same evening.
+case_id: h-11
+topology_size: eval
+topology_seed: 19
+seed: 9
+ticks: 260
+faults:
+- kind: ingress_noise
+  node_id: node-hub1-06
+  at_tick: 0
+- kind: amplifier_failure
+  amp_id: amp-hub2-node05-a1
+  at_tick: 222

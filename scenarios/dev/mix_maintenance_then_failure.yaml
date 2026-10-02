@@ -1,0 +1,14 @@
+# Planned work on node 06 ends, and two hours later an amplifier on the same node really fails.
+# The earlier maintenance must not explain away the later outage.
+case_id: mix-maintenance-then-failure
+topology_seed: 0
+seed: 21
+ticks: 96
+faults:
+  - kind: planned_maintenance
+    node_id: node-hub1-06
+    start_tick: 12
+    end_tick: 36
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node06-a5
+    at_tick: 60

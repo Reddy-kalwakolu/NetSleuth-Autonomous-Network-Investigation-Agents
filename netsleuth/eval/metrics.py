@@ -21,7 +21,12 @@ def tree_distance(topology: Topology, a: str, b: str) -> int:
 def location_score(topology: Topology, predicted: str | None, actual: str) -> float:
     if predicted is None or predicted not in topology:
         return 0.0
-    hops = tree_distance(topology, predicted, actual)
+    if predicted == actual:
+        return 1.0
+    try:
+        hops = tree_distance(topology, predicted, actual)
+    except ValueError:  # one of them is outside the tree, such as a power supply
+        return 0.0
     return max(0.0, 1.0 - CREDIT_LOST_PER_HOP * hops)
 
 

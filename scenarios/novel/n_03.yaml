@@ -1,0 +1,29 @@
+# A configuration push to one CMTS line card changes power targets for both service
+# groups it serves at the same moment.
+case_id: n-03
+topology_size: eval
+topology_seed: 11
+seed: 21
+ticks: 72
+faults:
+- kind: custom
+  category: config_change
+  root_device_id: cmts-hub1-2
+  graded_level: cmts
+  correct_action:
+    action: rollback_change
+    target: cmts-hub1-2
+  effects:
+  - at_tick: 30
+    effect:
+      kind: degrade_levels
+      scope_id: sg-hub1-c2-1
+      ds_db: -4.0
+      us_db: 14.0
+  - at_tick: 30
+    effect:
+      kind: degrade_levels
+      scope_id: sg-hub1-c2-2
+      ds_db: -4.0
+      us_db: 14.0
+  variant: line_card_push

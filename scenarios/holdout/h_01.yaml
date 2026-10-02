@@ -1,0 +1,10 @@
+# An amplifier deep in a cascade dies outright on a quiet afternoon.
+case_id: h-01
+topology_size: dev
+topology_seed: 3
+seed: 11
+ticks: 72
+faults:
+- kind: amplifier_failure
+  amp_id: amp-hub1-node06-a3
+  at_tick: 30

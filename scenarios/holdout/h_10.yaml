@@ -1,0 +1,16 @@
+# Two things happen on different nodes of the same small market, overlapping in time.
+case_id: h-10
+topology_size: dev
+topology_seed: 30
+seed: 2
+ticks: 70
+faults:
+- kind: amplifier_failure
+  amp_id: amp-hub1-node04-a2
+  at_tick: 15
+  partial: true
+- kind: planned_maintenance
+  node_id: node-hub1-07
+  start_tick: 25
+  end_tick: 50
+  publish_tick: 0

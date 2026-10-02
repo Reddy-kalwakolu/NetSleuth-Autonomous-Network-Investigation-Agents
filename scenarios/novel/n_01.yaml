@@ -1,0 +1,433 @@
+# The grid drops over a small area; homes there go dark first, and hours later a plant
+# power supply in that area runs out of battery and takes the actives it feeds with it.
+case_id: n-01
+topology_size: eval
+topology_seed: 23
+seed: 17
+ticks: 84
+faults:
+- kind: custom
+  category: power_supply_failure
+  root_device_id: ps-hub2-node05-2
+  graded_level: power_supply
+  correct_action:
+    action: dispatch_generator
+    target: ps-hub2-node05-2
+  effects:
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-39ff30af7666
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-3553a4d4bebc
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-c862cd8d858d
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-fda5dedb539c
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-b21a75b86613
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-5d9c256a3b4a
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-7774d3156f0b
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-b346ed1c8d08
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6b2330eb8c08
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-efba953d2fb4
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-a93c85c69478
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-bba2d5237b5e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6f51d58ba232
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-46035dc016ed
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-3f58d7a3009c
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-591f07962d74
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-3f8ad834f415
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-92fa8143b52a
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-c59bd49b2b36
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6f68b2207d7e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-8ae746f21964
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-cb02b9a6f28d
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6782331b563e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-eacda0a4a23e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-17a656207a90
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6f71f304c8df
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-66413478fa82
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-9427b9f8acfe
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-cc04153ae81e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-92cd3d958e3a
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-62d2e1e80c31
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-d3498afd90bb
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-9179e537a5c2
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-700470bb2a6e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-67b8f6602f1c
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-5b0de7fd70b3
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-55d99cd9313c
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-dc0213b27e0f
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-8002147a4ed2
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-3801df9425d3
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-5115ef1fa9a7
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-9b127d7d25e9
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-073cbe2f84e4
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-ca8251aebd54
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-505dff2c0dce
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-51f1624b4e33
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-7aedef75968c
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6d25abcb8947
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-ff6464ff0e48
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-f24379b61954
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-3178e401e4ae
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-2594f3b5ac10
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-23e15c177c0b
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-0abe439e7b4a
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-bbb6f92c75f5
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-7629c564a39b
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-eb9c8f7d2f71
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-443f60483814
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-c5b323db3f71
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-870d77c09fce
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-94c8dbe1c3a9
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6d219a2929f0
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-d479db629c60
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-589b4a0f6acd
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-4d5e8bc549a9
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-b3e6e11420f9
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-f697e004d85e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-d10db129e86c
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-f589cc20a04e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-1326d0541298
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-03f4dfe82c5c
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-ea1dc5ff87fd
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-ff82f0182ea7
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-d95104dd79a1
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-2e2cc533fc43
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-30a6e5a80853
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-1fa1a6059abb
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-eae9b6614570
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-2f461cde7830
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-29db204eb514
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-17290ca52aeb
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-e61b6b1036e9
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-195e81e65390
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-2fae580b676e
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-35966138aa6a
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-e3382d3582c4
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-46493d5f9f0f
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-d1872599c684
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-9897a8a5fbde
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-27e19ecc49de
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-d510aba89e1d
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-d59114a79d29
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-e448ab3ee66f
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-feaeb56fd44d
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-6f1f88c1e810
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-deef156f3696
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-37ebb73675c7
+  - at_tick: 10
+    effect:
+      kind: take_down
+      device_id: cm-93189ccfe44a
+  - at_tick: 55
+    effect:
+      kind: take_down
+      device_id: amp-hub2-node05-a6
+  - at_tick: 55
+    effect:
+      kind: take_down
+      device_id: amp-hub2-node05-a7
+  - at_tick: 55
+    effect:
+      kind: take_down
+      device_id: amp-hub2-node05-a8
+  - at_tick: 55
+    effect:
+      kind: take_down
+      device_id: amp-hub2-node05-a9
+  - at_tick: 55
+    effect:
+      kind: take_down
+      device_id: amp-hub2-node05-a10
+  - at_tick: 55
+    effect:
+      kind: take_down
+      device_id: amp-hub2-node05-a11
+  variant: battery_exhausted

@@ -1,0 +1,12 @@
+# Scheduled node work in the larger market, published at the start of the run.
+case_id: h-08
+topology_size: eval
+topology_seed: 26
+seed: 13
+ticks: 72
+faults:
+- kind: planned_maintenance
+  node_id: node-hub2-07
+  start_tick: 40
+  end_tick: 60
+  publish_tick: 0

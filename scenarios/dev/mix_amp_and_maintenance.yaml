@@ -1,0 +1,14 @@
+# Two things at once in different service groups: an amplifier fails on node 05 while planned
+# work runs on node 07. Each needs its own answer, and only one needs a truck.
+case_id: mix-amp-and-maintenance
+topology_seed: 0
+seed: 20
+ticks: 72
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node05-a5
+    at_tick: 20
+  - kind: planned_maintenance
+    node_id: node-hub1-07
+    start_tick: 30
+    end_tick: 60

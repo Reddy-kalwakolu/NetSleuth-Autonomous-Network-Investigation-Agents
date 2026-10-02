@@ -1,0 +1,10 @@
+# The fiber feeding a single node is cut late in the run.
+case_id: h-04
+topology_size: eval
+topology_seed: 5
+seed: 8
+ticks: 80
+faults:
+- kind: fiber_cut
+  node_id: node-hub2-06
+  at_tick: 50

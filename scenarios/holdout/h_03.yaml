@@ -1,0 +1,10 @@
+# A backhoe cuts a shared fiber route in the small market.
+case_id: h-03
+topology_size: dev
+topology_seed: 21
+seed: 27
+ticks: 60
+faults:
+- kind: fiber_cut
+  route: route-hub1-2
+  at_tick: 25

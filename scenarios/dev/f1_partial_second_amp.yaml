@@ -1,0 +1,11 @@
+# The second amplifier on node 08 degrades without dying. Nothing goes offline, so only the
+# drop in downstream power points at it, and it sits one step below the head of the cascade.
+case_id: f1-partial-second-amp
+topology_seed: 0
+seed: 13
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node08-a2
+    at_tick: 22
+    partial: true

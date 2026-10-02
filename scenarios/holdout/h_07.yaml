@@ -1,0 +1,12 @@
+# Scheduled work takes a node off the air for two hours; the window was published early.
+case_id: h-07
+topology_size: dev
+topology_seed: 14
+seed: 6
+ticks: 80
+faults:
+- kind: planned_maintenance
+  node_id: node-hub1-05
+  start_tick: 30
+  end_tick: 54
+  publish_tick: 4

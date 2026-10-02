@@ -1,0 +1,11 @@
+# Published planned work takes node 08 down for two and a half hours. Nothing is broken, and
+# no truck should go.
+case_id: d1-maintenance-node08
+topology_seed: 0
+seed: 19
+ticks: 72
+faults:
+  - kind: planned_maintenance
+    node_id: node-hub1-08
+    start_tick: 24
+    end_tick: 54

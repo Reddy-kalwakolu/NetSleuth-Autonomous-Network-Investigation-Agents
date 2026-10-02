@@ -1,0 +1,10 @@
+# The last amplifier on a short leg of node 02 fails and only 11 modems go dark. A small
+# outage is easy to miss and easy to blame on the amplifier above it.
+case_id: f1-small-leg
+topology_seed: 0
+seed: 12
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node02-a4
+    at_tick: 20

@@ -1,0 +1,10 @@
+# The third amplifier in node 05's first cascade fails. Its leg goes dark below the first two
+# amplifiers, which keep working, so the answer is in the middle of the chain, not at its head.
+case_id: f1-mid-cascade
+topology_seed: 0
+seed: 11
+ticks: 48
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node05-a3
+    at_tick: 18

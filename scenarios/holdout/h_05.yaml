@@ -1,0 +1,10 @@
+# Evening ingress leaks into one node and hurts its service group upstream.
+case_id: h-05
+topology_size: dev
+topology_seed: 9
+seed: 15
+ticks: 288
+faults:
+- kind: ingress_noise
+  node_id: node-hub1-04
+  at_tick: 0

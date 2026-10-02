@@ -1,0 +1,33 @@
+# A corroded connector opens up in the daytime heat: upstream noise during working hours
+# instead of the evening, plus a small level loss.
+case_id: n-05
+topology_size: dev
+topology_seed: 27
+seed: 12
+ticks: 200
+faults:
+- kind: custom
+  category: ingress_noise
+  root_device_id: node-hub1-06
+  graded_level: node
+  correct_action:
+    action: dispatch_tech
+    target: node-hub1-06
+    params:
+      work_type: ingress_sweep
+  effects:
+  - at_tick: 100
+    effect:
+      kind: degrade_levels
+      scope_id: node-hub1-06
+      ds_db: -1.5
+      us_db: 2.5
+  - at_tick: 100
+    effect:
+      kind: add_us_noise
+      service_group_id: sg-hub1-c2-1
+      snr_drop_db: 9.0
+      start_hour: 9
+      end_hour: 15
+  variant: daytime
+  onset_tick: 108

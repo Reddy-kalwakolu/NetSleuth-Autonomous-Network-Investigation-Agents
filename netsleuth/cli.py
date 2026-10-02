@@ -3,7 +3,8 @@
 ``netsleuth run scenarios/dev/f1_*.yaml`` runs each scenario end to end: simulate the network, write
 its data, detect anomalies, diagnose each one, and print scores against the ground truth.
 ``--system`` picks who diagnoses: the rules baseline (the default), the single prompt baseline, or
-the investigation agent. The two LLM systems need a model and its prices in the settings and its
+the investigation agent. ``netsleuth seal`` writes the digest manifest for the sealed holdout
+and novel sets. The two LLM systems need a model and its prices in the settings and its
 API key in the environment, and every run is priced and stopped once it has spent
 ``max_cost_usd_per_run``. A ``.env`` file in the working directory is loaded first, but never
 overrides a variable that is already set.
@@ -31,6 +32,7 @@ from netsleuth.eval import (
     run_cases,
     tracing_from_env,
 )
+from netsleuth.eval.sealing import MANIFEST, build_manifest
 from netsleuth.models import (
     LangChainLLM,
     ModelAccessError,
@@ -57,8 +59,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument(
         "--system", choices=SYSTEMS, default="rules", help="which system diagnoses (default: rules)"
     )
+    commands.add_parser(
+        "seal", help="write the digest manifest for the holdout and novel scenario sets"
+    )
     args = parser.parse_args(argv)
+    if args.command == "seal":
+        return _seal()
     return _run(args)
+
+
+def _seal() -> int:
+    """Seal the sets in the working directory. Only paths are printed, never content."""
+    root = Path.cwd()
+    manifest = build_manifest(root)
+    (root / MANIFEST).write_text(manifest, encoding="utf-8")
+    print(f"sealed {len(manifest.splitlines())} files in {MANIFEST}")
+    return 0
 
 
 def load_env_file(path: Path = Path(".env")) -> None:

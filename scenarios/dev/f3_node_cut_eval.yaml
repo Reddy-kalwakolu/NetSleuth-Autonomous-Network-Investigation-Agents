@@ -1,0 +1,11 @@
+# Only node 03's fiber is cut in the larger network. The two other nodes on its route stay up,
+# so this is a node cut, not a route cut.
+case_id: f3-node-cut-eval
+topology_size: eval
+topology_seed: 41
+seed: 16
+ticks: 48
+faults:
+  - kind: fiber_cut
+    node_id: node-hub1-03
+    at_tick: 20

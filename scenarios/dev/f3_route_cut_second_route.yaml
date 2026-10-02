@@ -1,0 +1,10 @@
+# The second fiber route in the dev network is cut, taking nodes 02, 04, 06 and 08 down
+# together across both CMTSs.
+case_id: f3-route-cut-second-route
+topology_seed: 0
+seed: 17
+ticks: 48
+faults:
+  - kind: fiber_cut
+    route: route-hub1-2
+    at_tick: 25

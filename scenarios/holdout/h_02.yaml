@@ -1,0 +1,11 @@
+# The first amplifier off a node starts to fail without going dark: levels sag behind it.
+case_id: h-02
+topology_size: eval
+topology_seed: 12
+seed: 4
+ticks: 96
+faults:
+- kind: amplifier_failure
+  amp_id: amp-hub2-node01-a1
+  at_tick: 20
+  partial: true

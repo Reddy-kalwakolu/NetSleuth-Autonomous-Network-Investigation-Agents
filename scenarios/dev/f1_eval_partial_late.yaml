@@ -1,0 +1,12 @@
+# A partial amplifier failure deep in a cascade of the larger network, late in a longer run,
+# so the history before it is long and quiet.
+case_id: f1-eval-partial-late
+topology_size: eval
+topology_seed: 41
+seed: 15
+ticks: 96
+faults:
+  - kind: amplifier_failure
+    amp_id: amp-hub2-node07-a4
+    at_tick: 60
+    partial: true

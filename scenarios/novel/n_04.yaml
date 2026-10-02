@@ -1,0 +1,43 @@
+# A plant device with a failing internal connection drops out and comes back several
+# times, each outage a different length.
+case_id: n-04
+topology_size: dev
+topology_seed: 16
+seed: 29
+ticks: 84
+faults:
+- kind: custom
+  category: amplifier_failure
+  root_device_id: amp-hub1-node04-a2
+  graded_level: amplifier
+  correct_action:
+    action: dispatch_tech
+    target: amp-hub1-node04-a2
+    params:
+      work_type: amp_repair
+  effects:
+  - at_tick: 20
+    effect:
+      kind: take_down
+      device_id: amp-hub1-node04-a2
+  - at_tick: 26
+    effect:
+      kind: restore
+      device_id: amp-hub1-node04-a2
+  - at_tick: 40
+    effect:
+      kind: take_down
+      device_id: amp-hub1-node04-a2
+  - at_tick: 44
+    effect:
+      kind: restore
+      device_id: amp-hub1-node04-a2
+  - at_tick: 60
+    effect:
+      kind: take_down
+      device_id: amp-hub1-node04-a2
+  - at_tick: 70
+    effect:
+      kind: restore
+      device_id: amp-hub1-node04-a2
+  variant: intermittent

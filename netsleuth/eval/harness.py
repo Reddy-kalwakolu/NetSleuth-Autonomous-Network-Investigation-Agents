@@ -30,6 +30,7 @@ from netsleuth.eval.cases import Case, simulate_case
 from netsleuth.eval.metrics import category_score, location_score, route_location_score
 from netsleuth.models import Usage
 from netsleuth.sandbox.topology import Node, ServiceGroup, Topology
+from netsleuth.sandbox.topology.models import PowerSupply
 from netsleuth.storage import DuckDBStorage, RunWriter, StorageSession
 
 System = Callable[[StorageSession, Mapping[str, Any]], Diagnosis]
@@ -299,7 +300,7 @@ def fault_scopes(topology: Topology, root_device_id: str) -> set[str]:
     groups. Upstream trouble hurts a whole service group, so a sibling node's anomaly belongs to
     the same fault."""
     if root_device_id in topology:
-        nodes = {_node_containing(topology, root_device_id)}
+        nodes = _nodes_affected_by(topology, root_device_id)
     else:  # a fiber route
         nodes = {n.device_id for n in topology.of_type(Node) if n.fiber_route == root_device_id}
     groups = {p.device_id for n in nodes if isinstance(p := topology.parent(n), ServiceGroup)}
@@ -307,11 +308,20 @@ def fault_scopes(topology: Topology, root_device_id: str) -> set[str]:
     return nodes | groups | siblings
 
 
-def _node_containing(topology: Topology, device_id: str) -> str:
+def _nodes_affected_by(topology: Topology, device_id: str) -> set[str]:
+    """The node a device sits in; for a device above the nodes, every node beneath it; for a power
+    supply, the nodes holding what it feeds. A device with none of these, such as a peering
+    link, can touch the whole network."""
     device = topology[device_id]
     if isinstance(device, Node):
-        return device.device_id
-    return next(a.device_id for a in topology.ancestors(device_id) if isinstance(a, Node))
+        return {device_id}
+    above = [a.device_id for a in topology.ancestors(device_id) if isinstance(a, Node)]
+    if above:
+        return {above[0]}
+    if isinstance(device, PowerSupply):
+        return set().union(*(_nodes_affected_by(topology, active) for active in device.feeds))
+    below = {d.device_id for d in topology.subtree(device_id) if isinstance(d, Node)}
+    return below or {n.device_id for n in topology.of_type(Node)}
 
 
 def _missed(fault: Mapping[str, Any]) -> FaultScore:

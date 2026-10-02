@@ -207,3 +207,78 @@ def test_a_finished_maintenance_window_does_not_hide_later_false_alarms(
     )
 
     assert result.false_alarms == 1
+
+
+def test_a_fault_above_node_level_claims_every_node_beneath_it(topo: Topology) -> None:
+    from netsleuth.sandbox.topology import Cmts
+
+    sg = topo.of_type(ServiceGroup)[0]
+    sg_nodes = {c.device_id for c in topo.children(sg.device_id) if isinstance(c, Node)}
+    cmts = topo.of_type(Cmts)[0]
+    cmts_nodes = {d.device_id for d in topo.subtree(cmts.device_id) if isinstance(d, Node)}
+
+    assert fault_scopes(topo, sg.device_id) == sg_nodes | {sg.device_id}
+    assert cmts_nodes <= fault_scopes(topo, cmts.device_id)
+    assert not {n.device_id for n in topo.of_type(Node)} - cmts_nodes & fault_scopes(
+        topo, cmts.device_id
+    )
+
+
+def test_a_power_supply_claims_the_nodes_it_feeds(topo: Topology) -> None:
+    from netsleuth.sandbox.topology.models import PowerSupply
+
+    supply = topo.of_type(PowerSupply)[0]
+    fed_nodes = {
+        a.device_id
+        if isinstance(a := topo[active], Node)
+        else next(p.device_id for p in topo.ancestors(active) if isinstance(p, Node))
+        for active in supply.feeds
+    }
+
+    assert fed_nodes <= fault_scopes(topo, supply.device_id)
+
+
+def test_a_device_with_no_node_near_it_claims_the_whole_network(topo: Topology) -> None:
+    from netsleuth.sandbox.topology.models import PeeringLink
+
+    link = topo.of_type(PeeringLink)[0]
+
+    assert {n.device_id for n in topo.of_type(Node)} <= fault_scopes(topo, link.device_id)
+
+
+def test_location_outside_the_tree_scores_exact_or_nothing(topo: Topology) -> None:
+    from netsleuth.eval.metrics import location_score
+    from netsleuth.sandbox.topology.models import PowerSupply
+
+    supply = topo.of_type(PowerSupply)[0].device_id
+    node = topo.of_type(Node)[0].device_id
+
+    assert location_score(topo, supply, supply) == 1.0
+    assert location_score(topo, node, supply) == 0.0
+    assert location_score(topo, supply, node) == 0.0
+
+
+def test_a_service_group_level_fault_runs_end_to_end(topo: Topology, tmp_path: Path) -> None:
+    sg = topo.of_type(ServiceGroup)[0]
+    nodes = [c.device_id for c in topo.children(sg.device_id) if isinstance(c, Node)]
+    case = Case(
+        case_id="sg-level",
+        ticks=30,
+        faults=[
+            CustomFaultSpec(
+                category="config_change",
+                root_device_id=sg.device_id,
+                graded_level="service_group",
+                correct_action=CorrectAction(action="no_action", target=None),
+                effects=tuple(
+                    ScheduledEffect(at_tick=10, effect=TakeDown(device_id=n)) for n in nodes
+                ),
+            )
+        ],
+    )
+
+    result = run_case(case, answer("config_change", sg.device_id), tmp_path / "d", tmp_path / "g")
+
+    (score,) = result.faults
+    assert score.detected
+    assert (score.category_score, score.location_score) == (1.0, 1.0)

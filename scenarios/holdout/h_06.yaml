@@ -1,0 +1,11 @@
+# Milder evening ingress on a node in the larger market, scheduled from the afternoon.
+case_id: h-06
+topology_size: eval
+topology_seed: 17
+seed: 22
+ticks: 280
+faults:
+- kind: ingress_noise
+  node_id: node-hub2-03
+  at_tick: 150
+  snr_drop_db: 8.0
