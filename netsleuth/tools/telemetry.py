@@ -87,7 +87,8 @@ def summarize_modem_health(session: StorageSession, scope_id: str, hours: int = 
         "SELECT modem_id, tick, ds_rx_power_dbmv FROM cm_rf WHERE tick >= ?",
         [then_tick],
     ).filter(pl.col("modem_id").is_in(ids))
-    polled_tick = int(rf["tick"].max()) if not rf.is_empty() else -1  # type: ignore[arg-type]
+    # The latest poll across the whole network: a dark scope has simply not answered it.
+    polled_tick = _latest_tick(session, "cm_rf")
     now = rf.filter(pl.col("tick") == polled_tick)
     earlier = (
         rf.filter(pl.col("tick") < polled_tick)

@@ -247,7 +247,7 @@ case f3-route-cut  [rules]
 
 Scenario files live in [`scenarios/dev`](scenarios/dev), and each one says what it tests. Run the tests with `uv run pytest`.
 
-To run the investigation agent or the single prompt baseline you need an OpenAI API key and, for tracing, a LangSmith key, both as environment variables (`OPENAI_API_KEY`, `LANGSMITH_API_KEY`). Set the model and its prices in `netsleuth.yaml`, which stays on your machine:
+To run the investigation agent or the single prompt baseline you need an OpenAI API key and, for tracing, a LangSmith key, both as environment variables (`OPENAI_API_KEY`, `LANGSMITH_API_KEY`) or in a `.env` file copied from [`.env.example`](.env.example). Git ignores `.env`, and a variable already set in your shell wins. Set the model and its prices in `netsleuth.yaml`, which stays on your machine:
 
 ```yaml
 llm_model: <an OpenAI model name>

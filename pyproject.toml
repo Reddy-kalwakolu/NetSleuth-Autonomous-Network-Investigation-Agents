@@ -22,6 +22,7 @@ dependencies = [
     "langchain-core>=1.6",
     "langchain-openai>=1.6",
     "langsmith>=0.14",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]

@@ -4,7 +4,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from pydantic import BaseModel
 
-from netsleuth.models import LangChainLLM, LLMError, ScriptedLLM, Usage
+from netsleuth.models import LangChainLLM, LLMError, ModelAccessError, ScriptedLLM, Usage
 
 
 class Answer(BaseModel):
@@ -90,3 +90,31 @@ def test_scripted_llm_can_fail_like_a_real_model() -> None:
 
     with pytest.raises(LLMError):
         ScriptedLLM(broken).ask(Answer, "s", "u", run_name="step")
+
+
+class Unauthorized(Exception):
+    status_code = 401
+
+
+def test_a_rejected_key_or_unknown_model_is_not_a_one_off_failure() -> None:
+    llm = LangChainLLM(StubModel(Unauthorized("invalid api key")))
+
+    with pytest.raises(ModelAccessError):
+        llm.ask(Answer, "s", "u", run_name="step")
+
+
+def test_long_lists_from_the_model_are_trimmed_not_rejected() -> None:
+    from netsleuth.agents.schemas import (
+        EvidenceRequest,
+        Hypotheses,
+        Hypothesis,
+        ScoredHypothesis,
+        Scores,
+    )
+
+    many = [Hypothesis(category="unknown", why=str(i)) for i in range(6)]
+    scored = [ScoredHypothesis(category="unknown", confidence=0.1) for _ in range(6)]
+
+    assert len(Hypotheses(ranked=many).ranked) == 4
+    assert len(EvidenceRequest(checks=["a", "b", "c", "d", "e"]).checks) == 3
+    assert len(Scores(scored=scored, summary="s").scored) == 4

@@ -83,6 +83,15 @@ def tracing_from_env(settings: Settings) -> Tracing | None:
     return None
 
 
+class RunAborted(RuntimeError):
+    """A case failed in a way the system could not absorb. Carries the scores already made."""
+
+    def __init__(self, case_id: str, cause: BaseException, results: list["CaseResult"]) -> None:
+        super().__init__(f"case {case_id} failed: {cause}")
+        self.cause = cause
+        self.results = results
+
+
 class BudgetExceeded(RuntimeError):
     def __init__(self, spent: float, limit: float, results: list[CaseResult]) -> None:
         super().__init__(f"spent ${spent:.4f} of a ${limit:.2f} run budget; stopped")
@@ -220,15 +229,18 @@ def run_cases(
     for case in cases:
         if on_case is not None:
             on_case(case)
-        result = run_case(
-            case,
-            system,
-            data_dir,
-            ground_truth_dir,
-            system_name,
-            pricing=pricing,
-            tracing=tracing,
-        )
+        try:
+            result = run_case(
+                case,
+                system,
+                data_dir,
+                ground_truth_dir,
+                system_name,
+                pricing=pricing,
+                tracing=tracing,
+            )
+        except Exception as error:  # keep every score already paid for
+            raise RunAborted(case.case_id, error, results) from error
         results.append(result)
         if result.usage is not None and result.usage.cost_usd is not None:
             spent += result.usage.cost_usd

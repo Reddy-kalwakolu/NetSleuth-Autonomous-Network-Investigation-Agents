@@ -117,3 +117,23 @@ def test_without_tracing_settings_tracing_is_off(tmp_path: Path) -> None:
     run_case(AMP_CASE, spy, tmp_path / "d", tmp_path / "g", system_name="spy")
 
     assert seen == [False]
+
+
+def test_an_unexpected_failure_keeps_the_scores_already_paid_for(tmp_path: Path) -> None:
+    from netsleuth.eval import RunAborted
+
+    calls = {"n": 0}
+
+    def fragile(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagnosis:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("disk full")
+        return rules_baseline(session, anomaly)
+
+    cases = [AMP_CASE.model_copy(update={"case_id": f"c{i}"}) for i in range(3)]
+
+    with pytest.raises(RunAborted) as aborted:
+        run_cases(cases, fragile, tmp_path / "d", tmp_path / "g", system_name="fragile")
+
+    assert [r.case_id for r in aborted.value.results] == ["c0"]
+    assert "disk full" in str(aborted.value)

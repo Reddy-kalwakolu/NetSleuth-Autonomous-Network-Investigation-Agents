@@ -16,7 +16,32 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class LLMError(RuntimeError):
-    """An LLM call that failed or came back unusable."""
+    """An LLM call that failed or came back unusable. One diagnosis is lost; the run goes on."""
+
+
+class ModelAccessError(RuntimeError):
+    """The model can't be used at all: a rejected key, missing permission or an unknown model.
+    Every case would fail the same way, so the run stops."""
+
+
+# Provider errors that mean the model is unusable, by HTTP status (OpenAI, Anthropic) or by
+# AWS error code (Bedrock).
+_ACCESS_STATUSES = {401, 403, 404}
+_ACCESS_CODES = {
+    "AccessDeniedException",
+    "UnrecognizedClientException",
+    "ResourceNotFoundException",
+    "ExpiredTokenException",
+}
+
+
+def _is_access_error(error: Exception) -> bool:
+    if getattr(error, "status_code", None) in _ACCESS_STATUSES:
+        return True
+    response = getattr(error, "response", None)
+    if isinstance(response, dict):
+        return response.get("Error", {}).get("Code") in _ACCESS_CODES
+    return False
 
 
 @dataclass
@@ -68,7 +93,9 @@ class LangChainLLM:
                 [SystemMessage(content=system), HumanMessage(content=user)],
                 config={"run_name": run_name},
             )
-        except Exception as error:  # the provider boundary: every failure becomes an LLMError
+        except Exception as error:  # the provider boundary
+            if _is_access_error(error):
+                raise ModelAccessError(f"{run_name}: {error}") from error
             raise LLMError(f"{run_name}: {error}") from error
         meta = getattr(out.get("raw"), "usage_metadata", None) or {}
         self.usage.add(int(meta.get("input_tokens", 0)), int(meta.get("output_tokens", 0)))

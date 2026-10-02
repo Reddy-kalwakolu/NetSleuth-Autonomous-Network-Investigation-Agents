@@ -146,3 +146,15 @@ def test_citations_of_facts_that_were_never_shown_are_dropped(
 
     assert report.evidence
     assert all("invented" not in item.query_ref for item in report.evidence)
+
+
+def test_model_access_errors_escape_the_agent(
+    after: DuckDBSession, amp_anomaly: Mapping[str, Any]
+) -> None:
+    from netsleuth.models import ModelAccessError
+
+    def locked_out(schema: type[BaseModel], system: str, user: str) -> BaseModel:
+        raise ModelAccessError("401 invalid api key")
+
+    with pytest.raises(ModelAccessError):
+        InvestigationAgent(ScriptedLLM(locked_out))(after, amp_anomaly)

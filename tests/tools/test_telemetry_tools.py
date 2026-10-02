@@ -1,8 +1,10 @@
+from pathlib import Path
+
 import pytest
 
 from netsleuth.storage import DuckDBSession
 from netsleuth.tools import ToolError, call_tool
-from tests.support import AMP
+from tests.support import AMP, FAULT_TICK
 
 
 def test_modem_health_sees_the_outage_after_and_not_before(
@@ -85,3 +87,19 @@ def test_every_tool_summary_is_short(after: DuckDBSession) -> None:
         ("get_cm_events", {"scope_id": "sg-hub1-c1-2"}),
     ]:
         assert len(call_tool(after, name, args).summary) <= 600, name
+
+
+def test_right_after_the_failure_dark_modems_have_not_answered_the_poll(run_dir: Path) -> None:
+    # The harness diagnoses right after onset; this is when the facts must be consistent. Tick 21
+    # is the first RF poll after the amplifier failed at tick 20.
+    from datetime import timedelta
+
+    from netsleuth.sandbox.engine import DEFAULT_START
+    from netsleuth.storage import DuckDBStorage
+
+    as_of = DEFAULT_START + timedelta(minutes=5 * (FAULT_TICK + 1))
+    with DuckDBStorage(run_dir).session("tools", as_of) as session:
+        data = call_tool(session, "summarize_modem_health", {"scope_id": AMP}).data
+
+    assert data["offline_now"] == 166
+    assert data["polled_now"] == 0

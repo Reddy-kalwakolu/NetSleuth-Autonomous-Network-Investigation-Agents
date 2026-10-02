@@ -1,14 +1,30 @@
+import os
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from langsmith import tracing_context
 
 from netsleuth.detector import detect_anomalies
 from netsleuth.eval import AmplifierFailureSpec, Case, PlannedMaintenanceSpec, simulate_case
 from netsleuth.sandbox.engine import DEFAULT_START
 from netsleuth.storage import DuckDBSession, DuckDBStorage, RunWriter
 from tests.support import AMP, FAULT_TICK, TICKS
+
+# Anything that could reach a paid API, send a trace, or pick up a developer's local settings.
+_ISOLATED_PREFIXES = ("OPENAI_", "ANTHROPIC_", "AWS_", "LANGSMITH_", "LANGCHAIN_", "NETSLEUTH_")
+
+
+@pytest.fixture(autouse=True)
+def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
+    """No test sees real credentials, a local netsleuth.yaml or .env, or live tracing."""
+    for name in list(os.environ):
+        if name.startswith(_ISOLATED_PREFIXES):
+            monkeypatch.delenv(name)
+    monkeypatch.chdir(tmp_path)
+    with tracing_context(enabled=False):
+        yield
 
 
 @pytest.fixture(scope="session")

@@ -1,8 +1,21 @@
-"""What each LLM step must answer with. Structured output keeps every answer typed."""
+"""What each LLM step must answer with. Structured output keeps every answer typed.
 
-from pydantic import BaseModel, Field
+A model that returns more items than a step uses is trimmed to the first ones, not rejected:
+losing a whole diagnosis over a fifth hypothesis would be the wrong trade.
+"""
+
+from typing import Annotated, Any
+
+from pydantic import AfterValidator, BaseModel, Field
 
 from netsleuth.diagnosis import DiagnosisCategory
+
+
+def _first(n: int) -> AfterValidator:
+    def keep(items: list[Any]) -> list[Any]:
+        return items[:n]
+
+    return AfterValidator(keep)
 
 
 class Hypothesis(BaseModel):
@@ -12,11 +25,11 @@ class Hypothesis(BaseModel):
 
 
 class Hypotheses(BaseModel):
-    ranked: list[Hypothesis] = Field(min_length=1, max_length=4)
+    ranked: Annotated[list[Hypothesis], Field(min_length=1), _first(4)]
 
 
 class EvidenceRequest(BaseModel):
-    checks: list[str] = Field(default_factory=list, max_length=3)
+    checks: Annotated[list[str], _first(3)] = Field(default_factory=list)
     done: bool = False
 
 
@@ -29,7 +42,7 @@ class ScoredHypothesis(BaseModel):
 
 
 class Scores(BaseModel):
-    scored: list[ScoredHypothesis] = Field(min_length=1, max_length=4)
+    scored: Annotated[list[ScoredHypothesis], Field(min_length=1), _first(4)]
     summary: str
 
 

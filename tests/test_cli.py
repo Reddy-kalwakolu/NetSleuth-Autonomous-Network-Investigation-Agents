@@ -135,6 +135,8 @@ def test_agent_system_runs_with_a_scripted_model(
         "build_llm",
         lambda settings: ScriptedLLM(oracle("amplifier_failure", "amp-hub1-node04-a1")),
     )
+    monkeypatch.setenv("NETSLEUTH_LLM_INPUT_USD_PER_MTOK", "1")
+    monkeypatch.setenv("NETSLEUTH_LLM_OUTPUT_USD_PER_MTOK", "1")
     scenario = tmp_path / "f1_cli.yaml"
     scenario.write_text(F1_SCENARIO, encoding="utf-8")
 
@@ -172,3 +174,70 @@ def test_spent_budget_exits_nonzero_with_partial_scores(
     assert code == 3
     assert "case f1_a" in captured.out and "case f1_b" not in captured.out
     assert "budget" in captured.err
+
+
+def test_llm_systems_need_prices_so_the_budget_can_work(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from netsleuth import cli
+    from netsleuth.models import ScriptedLLM
+    from tests.support import oracle
+
+    monkeypatch.setattr(
+        cli,
+        "build_llm",
+        lambda settings: ScriptedLLM(oracle("amplifier_failure", "amp-hub1-node04-a1")),
+    )
+    scenario = tmp_path / "f1_cli.yaml"
+    scenario.write_text(F1_SCENARIO, encoding="utf-8")
+
+    code = main(["run", str(scenario), "--system", "agent", *folders(tmp_path)])
+
+    assert code == 2
+    assert "llm_input_usd_per_mtok" in capsys.readouterr().err
+    assert not (tmp_path / "data").exists()
+
+
+def test_a_rejected_key_stops_the_run_with_the_reason(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pydantic import BaseModel
+
+    from netsleuth import cli
+    from netsleuth.models import ModelAccessError, ScriptedLLM
+
+    def locked_out(schema: type[BaseModel], system: str, user: str) -> BaseModel:
+        raise ModelAccessError("401 invalid api key")
+
+    monkeypatch.setattr(cli, "build_llm", lambda settings: ScriptedLLM(locked_out))
+    monkeypatch.setenv("NETSLEUTH_LLM_INPUT_USD_PER_MTOK", "1")
+    monkeypatch.setenv("NETSLEUTH_LLM_OUTPUT_USD_PER_MTOK", "1")
+    scenario = tmp_path / "f1_cli.yaml"
+    scenario.write_text(F1_SCENARIO, encoding="utf-8")
+
+    code = main(["run", str(scenario), "--system", "agent", *folders(tmp_path)])
+
+    assert code == 2
+    assert "401" in capsys.readouterr().err
+
+
+def test_dotenv_file_is_loaded_but_never_overrides_the_shell(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    from netsleuth.cli import load_env_file
+
+    # Register both names with monkeypatch so whatever the file sets is undone afterwards.
+    monkeypatch.setenv("OPENAI_API_KEY", "from-shell")
+    monkeypatch.setenv("NETSLEUTH_MAX_COST_USD_PER_RUN", "placeholder")
+    monkeypatch.delenv("NETSLEUTH_MAX_COST_USD_PER_RUN")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "OPENAI_API_KEY=from-file\nNETSLEUTH_MAX_COST_USD_PER_RUN=5\n", encoding="utf-8"
+    )
+
+    load_env_file(env_file)
+
+    assert os.environ["OPENAI_API_KEY"] == "from-shell"
+    assert os.environ["NETSLEUTH_MAX_COST_USD_PER_RUN"] == "5"
