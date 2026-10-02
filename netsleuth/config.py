@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import PositiveInt
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     storage_backend: StorageBackend = "duckdb"
     data_dir: Path = Path("data")
     ground_truth_dir: Path = Path("ground_truth")
+
+    # Model layer. The provider's API key comes from its own environment variable, never here.
+    llm_provider: Literal["openai", "anthropic", "bedrock"] = "openai"
+    llm_model: str | None = None
+    llm_input_usd_per_mtok: NonNegativeFloat | None = None
+    llm_output_usd_per_mtok: NonNegativeFloat | None = None
+    max_tool_calls: PositiveInt = 8
+    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    max_cost_usd_per_run: PositiveFloat = 2.0
+    langsmith_project: str = "netsleuth"
+    langsmith_tracing: bool = True
 
     @classmethod
     def settings_customise_sources(

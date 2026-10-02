@@ -18,10 +18,22 @@ dependencies = [
     "tzdata>=2026.4",
     "duckdb>=1.1",
     "pyarrow>=15",
+    "langgraph>=1.2",
+    "langchain-core>=1.6",
+    "langchain-openai>=1.6",
+    "langsmith>=0.14",
 ]
 
 [project.scripts]
 netsleuth = "netsleuth.cli:entry"
+
+[project.optional-dependencies]
+anthropic = [
+    "langchain-anthropic>=1.0",
+]
+bedrock = [
+    "langchain-aws>=1.0",
+]
 
 [dependency-groups]
 dev = [

@@ -80,3 +80,19 @@ def test_tick_minutes_must_be_positive(tmp_path: Path) -> None:
 def test_missing_explicit_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_settings(tmp_path / "does_not_exist.yaml")
+
+
+def test_llm_settings_have_safe_defaults() -> None:
+    settings = Settings()
+
+    assert settings.llm_provider == "openai"
+    assert settings.llm_model is None
+    assert settings.max_tool_calls == 8
+    assert settings.max_cost_usd_per_run == 2.0
+
+
+def test_confidence_threshold_must_be_a_probability(tmp_path: Path) -> None:
+    path = write_yaml(tmp_path / "c.yaml", "confidence_threshold: 1.5\n")
+
+    with pytest.raises(ValidationError):
+        load_settings(path)
