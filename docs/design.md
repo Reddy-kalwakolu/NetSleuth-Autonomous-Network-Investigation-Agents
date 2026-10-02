@@ -604,8 +604,8 @@ If I fall behind, I cut in this order: Tier 3, Tier 2, the Athena demo run (keep
 | The simulator isn't realistic enough | Domain details checked against how cable plants behave, assumptions listed openly, a cable engineer reviews the fault catalog |
 | The simulator grows out of control | A 45 hour cap, the scope rule, faults built from shared primitives |
 | The evaluation set is small and related | Bootstrapping by template, results per fault type, case by case comparison |
-| LLM costs | Cost per case measured in week 2, tiered CI, cached results, a $50 monthly cap |
-| LangSmith free tier limits | Checked against evaluation volume in week 2, alongside cost per case |
+| LLM costs | Measured on October 1, 2026 with `gpt-5.4-mini` on the dev scenarios: about $0.008 per investigation for the agent and $0.0014 for the single prompt, so the $50 monthly cap covers thousands of investigations. Every run is priced and stopped at `max_cost_usd_per_run`; tiered CI and cached results keep repeat runs cheap |
+| LangSmith free tier limits | Each investigation is one trace; a full dev run is about 30 traces across the two LLM systems. I watch the monthly count as the case set grows |
 | Milestone 1 is dense | Tasks 7 and 8 can move into milestone 2 without changing scope |
 
 ## 17. Decision log
