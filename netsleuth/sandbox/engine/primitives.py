@@ -7,7 +7,15 @@ only thing that applies them.
 from dataclasses import dataclass
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveFloat, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    model_validator,
+)
 
 DeviceStatus = Literal["healthy", "degraded", "down"]
 
@@ -93,8 +101,47 @@ class MaintenanceWindow(_Primitive):
         return self
 
 
+class UtilityOutage(_Primitive):
+    """Homes and power supplies in a power area lose utility power for ``duration_ticks``.
+    Supplies carry their actives on battery until it runs out."""
+
+    kind: Literal["utility_outage"] = "utility_outage"
+    power_area: str
+    duration_ticks: PositiveInt
+
+
+class ConfigChange(_Primitive):
+    """A configuration push to a CMTS or service group. It writes a change log entry, and from
+    that moment every upstream channel of every service group under the target loses SNR."""
+
+    kind: Literal["config_change"] = "config_change"
+    change_id: str
+    target_id: str
+    snr_drop_db: PositiveFloat
+    description: str = "configuration push"
+
+
+class PeeringLoad(_Primitive):
+    """Extra traffic on a peering link every day between two local hours, pushing it toward
+    ``peak_util_pct``. ``end_hour`` is exclusive, and a window can wrap midnight."""
+
+    kind: Literal["peering_load"] = "peering_load"
+    link_id: str
+    peak_util_pct: float = Field(gt=0, le=100)
+    start_hour: int = Field(ge=0, le=23)
+    end_hour: int = Field(ge=0, le=24)
+
+
 AnyEffect = (
-    TakeDown | DegradeLevels | Restore | CutFiberRoute | AddUpstreamNoise | MaintenanceWindow
+    TakeDown
+    | DegradeLevels
+    | Restore
+    | CutFiberRoute
+    | AddUpstreamNoise
+    | MaintenanceWindow
+    | UtilityOutage
+    | ConfigChange
+    | PeeringLoad
 )
 Effect = Annotated[AnyEffect, Field(discriminator="kind")]
 
@@ -107,7 +154,8 @@ class ScheduledEffect(BaseModel):
 
 
 def effect_targets(effect: AnyEffect) -> tuple[str, ...]:
-    """Device IDs the effect names. Fiber routes aren't devices and are checked separately."""
+    """Device IDs the effect names. Fiber routes and power areas aren't devices and are checked
+    separately."""
     match effect:
         case TakeDown(device_id=device_id) | Restore(device_id=device_id):
             return (device_id,)
@@ -115,5 +163,9 @@ def effect_targets(effect: AnyEffect) -> tuple[str, ...]:
             return (scope_id,)
         case AddUpstreamNoise(service_group_id=service_group_id):
             return (service_group_id,)
-        case CutFiberRoute():
+        case ConfigChange(target_id=target_id):
+            return (target_id,)
+        case PeeringLoad(link_id=link_id):
+            return (link_id,)
+        case CutFiberRoute() | UtilityOutage():
             return ()

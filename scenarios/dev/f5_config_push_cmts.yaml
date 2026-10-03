@@ -1,0 +1,10 @@
+# A bad configuration push to CMTS 2 drops upstream SNR on all four of its service groups at once,
+# at a quiet hour, right after the change log entry. Rolling it back is the fix.
+case_id: f5-config-push-cmts
+topology_seed: 0
+seed: 33
+ticks: 48
+faults:
+  - kind: config_push
+    target_id: cmts-hub1-2
+    at_tick: 30

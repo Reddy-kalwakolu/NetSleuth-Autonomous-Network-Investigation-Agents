@@ -238,12 +238,6 @@ def test_a_power_supply_claims_the_nodes_it_feeds(topo: Topology) -> None:
     assert fed_nodes <= fault_scopes(topo, supply.device_id)
 
 
-def test_a_device_with_no_node_near_it_claims_nothing(topo: Topology) -> None:
-    from netsleuth.sandbox.topology.models import PeeringLink
-
-    assert fault_scopes(topo, topo.of_type(PeeringLink)[0].device_id) == set()
-
-
 def test_an_invisible_fault_does_not_swallow_a_real_one(topo: Topology, tmp_path: Path) -> None:
     from netsleuth.sandbox.topology.models import PeeringLink
 
@@ -308,3 +302,80 @@ def test_a_service_group_level_fault_runs_end_to_end(topo: Topology, tmp_path: P
     (score,) = result.faults
     assert score.detected
     assert (score.category_score, score.location_score) == (1.0, 1.0)
+
+
+POWER_AREA = "pa-hub1-3-3"
+
+
+def nodes_with_homes_in(topo: Topology, area: str) -> set[str]:
+    from netsleuth.sandbox.topology.models import Modem
+
+    return {
+        next(a.device_id for a in topo.ancestors(m.device_id) if isinstance(a, Node))
+        for m in topo.of_type(Modem)
+        if m.power_area == area
+    }
+
+
+def test_a_power_area_claims_the_nodes_its_homes_hang_off(topo: Topology) -> None:
+    assert nodes_with_homes_in(topo, POWER_AREA) <= fault_scopes(topo, POWER_AREA)
+
+
+def test_a_power_supply_also_claims_the_homes_in_its_area(topo: Topology) -> None:
+    from netsleuth.sandbox.topology.models import PowerSupply
+
+    supply = next(p for p in topo.of_type(PowerSupply) if p.power_area == POWER_AREA)
+
+    assert nodes_with_homes_in(topo, POWER_AREA) <= fault_scopes(topo, supply.device_id)
+
+
+def test_a_fault_always_claims_its_own_answer_device(topo: Topology) -> None:
+    from netsleuth.sandbox.topology.models import PeeringLink
+
+    link = topo.of_type(PeeringLink)[0].device_id
+
+    assert fault_scopes(topo, link) == {link}
+
+
+def test_a_power_area_answer_is_scored_by_exact_match(topo: Topology, tmp_path: Path) -> None:
+    from netsleuth.eval import UtilityOutageSpec
+
+    case = Case(
+        case_id="d3",
+        ticks=40,
+        faults=[UtilityOutageSpec(power_area=POWER_AREA, at_tick=10, duration_ticks=12)],
+    )
+
+    right = run_case(
+        case, answer("commercial_power_outage", POWER_AREA), tmp_path / "a", tmp_path / "g"
+    )
+    near = run_case(
+        case, answer("commercial_power_outage", "pa-hub1-3-4"), tmp_path / "b", tmp_path / "g"
+    )
+
+    assert (right.faults[0].category_score, right.faults[0].location_score) == (1.0, 1.0)
+    assert near.faults[0].location_score == 0.0
+
+
+def test_a_device_answer_at_power_area_level_keeps_partial_credit(
+    topo: Topology, tmp_path: Path
+) -> None:
+    node = "node-hub1-04"
+    amp = next(d.device_id for d in topo.children(node) if d.device_type == "amplifier")
+    case = Case(
+        case_id="old-area",
+        ticks=24,
+        faults=[
+            CustomFaultSpec(
+                category="commercial_power_outage",
+                root_device_id=node,
+                graded_level="power_area",
+                correct_action=CorrectAction(action="monitor", target=None),
+                effects=(ScheduledEffect(at_tick=6, effect=TakeDown(device_id=node)),),
+            )
+        ],
+    )
+
+    result = run_case(case, answer("commercial_power_outage", amp), tmp_path / "d", tmp_path / "g")
+
+    assert result.faults[0].location_score == 0.75

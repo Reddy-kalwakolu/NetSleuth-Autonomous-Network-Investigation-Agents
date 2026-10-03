@@ -12,6 +12,8 @@ whatever the active faults do. Two kinds of source follow different rules:
   restart, because it rebooted.
 
 Planned maintenance windows are written to the calendar table once, when they're published.
+Power supply status, utility power events, the change log, peering status and tickets come from
+``events.py``, on a random stream of their own.
 
 Everything is computed with numpy across all devices at once, and anything derived from fault state
 is cached until the engine applies another effect, so month long runs at the ``scale`` size stay
@@ -26,6 +28,7 @@ import numpy as np
 import polars as pl
 
 from netsleuth.sandbox.engine import Engine
+from netsleuth.sandbox.telemetry.events import EventSources
 from netsleuth.sandbox.topology import Modem, Node, ServiceGroup
 
 RF_POLL_EVERY_TICKS = 3  # modem RF every 15 minutes at 5 minute ticks
@@ -88,6 +91,11 @@ class TickTelemetry:
     node_optical: pl.DataFrame
     cm_events: pl.DataFrame
     maintenance: pl.DataFrame
+    ps_status: pl.DataFrame
+    power_events: pl.DataFrame
+    change_log: pl.DataFrame
+    peering_status: pl.DataFrame
+    tickets: pl.DataFrame
 
 
 TS = pl.Datetime("us", "UTC")
@@ -189,6 +197,9 @@ class TelemetryGenerator:
         self._ds_offset = np.zeros(n)
         self._us_offset = np.zeros(n)
 
+        # Last, and on its own stream, so nothing above changes.
+        self._events = EventSources(engine, self._modem_ids, self._modem_sg)
+
     def _refresh_fault_state(self) -> None:
         if self.engine.revision == self._revision:
             return
@@ -213,6 +224,8 @@ class TelemetryGenerator:
         n = len(self._modem_ids)
         up = self._modem_up
         noise = np.array([engine.us_noise_db(sg) for sg in self._sg_ids])
+        # A configuration push hits every channel, at any hour. Zero adds nothing, exactly.
+        config = np.array([engine.config_snr_db(sg) for sg in self._sg_ids])
         came_back = up & ~self._was_up  # modems that just rebooted
         self._was_up = up.copy()
         self._corrected[came_back] = 0
@@ -244,7 +257,7 @@ class TelemetryGenerator:
             self._us_mer_base
             + rng.normal(0, US_MER_NOISE, n)
             - CMTS_MER_LOSS_PER_DB * shortfall
-            - CMTS_MER_PER_NOISE_DB * noise[self._modem_sg]
+            - CMTS_MER_PER_NOISE_DB * (noise + config)[self._modem_sg]
         )
 
         cm_status = pl.DataFrame(
@@ -284,6 +297,7 @@ class TelemetryGenerator:
             self._snr_base
             + rng.normal(0, US_SNR_NOISE, channel_count)
             - noise[self._channel_sg_index] * self._channel_noise_share
+            - config[self._channel_sg_index]
         )
         sg_channels = pl.DataFrame(
             {"sg_id": self._channel_sg, "channel": self._channel_names, "us_snr_db": snr}
@@ -364,6 +378,8 @@ class TelemetryGenerator:
                 schema={k: v for k, v in CM_RF_SCHEMA.items() if k not in ("ts", "tick")}
             )
 
+        events = self._events.emit(tick, evening, up, low_snr)
+
         return TickTelemetry(
             tick=tick,
             ts=ts,
@@ -374,13 +390,18 @@ class TelemetryGenerator:
             node_optical=_stamp(node_optical, tick, ts),
             cm_events=_stamp(cm_events, tick, ts),
             maintenance=_stamp(maintenance, tick, ts),
+            **{name: _stamp(frame, tick, ts) for name, frame in events.items()},
         )
 
 
 def _stamp(frame: pl.DataFrame, tick: int, ts: datetime) -> pl.DataFrame:
-    """Put ``ts`` and ``tick`` first on every row."""
-    return frame.select(
-        pl.lit(ts, dtype=TS).alias("ts"),
-        pl.lit(tick, dtype=pl.Int64()).alias("tick"),
-        pl.all(),
+    """Put ``ts`` and ``tick`` first on every row. Repeating a one value series is much cheaper
+    than a literal, and this runs a dozen times a tick."""
+    height = frame.height
+    stamps = pl.DataFrame(
+        [
+            pl.Series("ts", [ts], dtype=TS).new_from_index(0, height),
+            pl.Series("tick", [tick], dtype=pl.Int64()).new_from_index(0, height),
+        ]
     )
+    return stamps.hstack(frame.get_columns())

@@ -1,21 +1,26 @@
 """The NetSandbox state engine: ticks, device state, reachability, faults and ground truth."""
 
 from netsleuth.sandbox.engine.clock import DEFAULT_START
-from netsleuth.sandbox.engine.engine import CalendarEntry, Engine
+from netsleuth.sandbox.engine.engine import CalendarEntry, ChangeLogEntry, Engine, PowerSupplyState
 from netsleuth.sandbox.engine.faults import (
     CorrectAction,
     Fault,
     GradedLevel,
     RootCauseCategory,
     amplifier_failure,
+    config_push,
     fiber_cut,
     ingress_noise,
+    peering_congestion,
     planned_maintenance,
+    power_areas,
+    utility_outage,
 )
 from netsleuth.sandbox.engine.ground_truth import write_ground_truth
 from netsleuth.sandbox.engine.primitives import (
     AddUpstreamNoise,
     AnyEffect,
+    ConfigChange,
     CutFiberRoute,
     DegradeLevels,
     DeviceState,
@@ -23,9 +28,11 @@ from netsleuth.sandbox.engine.primitives import (
     Effect,
     EngineError,
     MaintenanceWindow,
+    PeeringLoad,
     Restore,
     ScheduledEffect,
     TakeDown,
+    UtilityOutage,
 )
 
 __all__ = [
@@ -33,6 +40,8 @@ __all__ = [
     "AddUpstreamNoise",
     "AnyEffect",
     "CalendarEntry",
+    "ChangeLogEntry",
+    "ConfigChange",
     "CorrectAction",
     "CutFiberRoute",
     "DegradeLevels",
@@ -44,13 +53,20 @@ __all__ = [
     "Fault",
     "GradedLevel",
     "MaintenanceWindow",
+    "PeeringLoad",
+    "PowerSupplyState",
     "Restore",
     "RootCauseCategory",
     "ScheduledEffect",
     "TakeDown",
+    "UtilityOutage",
     "amplifier_failure",
+    "config_push",
     "fiber_cut",
     "ingress_noise",
+    "peering_congestion",
     "planned_maintenance",
+    "power_areas",
+    "utility_outage",
     "write_ground_truth",
 ]

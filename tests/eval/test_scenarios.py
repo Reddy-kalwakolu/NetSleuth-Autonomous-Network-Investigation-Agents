@@ -75,11 +75,19 @@ def test_a_missing_file_is_a_scenario_error(tmp_path: Path) -> None:
         load_case(tmp_path / "nope.yaml")
 
 
-def test_the_dev_set_has_about_twenty_cases_covering_every_built_fault_kind() -> None:
+def test_the_dev_set_covers_every_built_fault_kind() -> None:
     kinds = {fault.kind for path in DEV_SCENARIOS for fault in load_case(path).faults}
 
-    assert 18 <= len(DEV_SCENARIOS) <= 25
-    assert kinds == {"amplifier_failure", "fiber_cut", "ingress_noise", "planned_maintenance"}
+    assert 20 <= len(DEV_SCENARIOS) <= 40
+    assert kinds == {
+        "amplifier_failure",
+        "fiber_cut",
+        "ingress_noise",
+        "planned_maintenance",
+        "utility_outage",
+        "config_push",
+        "peering_congestion",
+    }
     assert any(len(load_case(path).faults) > 1 for path in DEV_SCENARIOS)
 
 

@@ -29,7 +29,8 @@ from netsleuth.diagnosis import Diagnosis
 from netsleuth.eval.cases import Case, simulate_case
 from netsleuth.eval.metrics import category_score, location_score, route_location_score
 from netsleuth.models import Usage
-from netsleuth.sandbox.topology import Node, ServiceGroup, Topology
+from netsleuth.sandbox.engine import power_areas
+from netsleuth.sandbox.topology import Modem, Node, ServiceGroup, Topology
 from netsleuth.sandbox.topology.models import PowerSupply
 from netsleuth.storage import DuckDBStorage, RunWriter, StorageSession
 
@@ -140,19 +141,23 @@ def run_case(
         ]
         ends = later_starts + ([fault["end_tick"]] if fault.get("end_tick") is not None else [])
         until = min(ends, default=None)
+        claim_from = fault.get("claim_from_tick")
         mine = [
             r
             for r in rows
             if r["scope_device_id"] in scopes[i]
-            and r["tick"] >= fault["start_tick"]
+            and r["tick"] >= (fault["start_tick"] if claim_from is None else claim_from)
             and (until is None or r["tick"] < until)
             and r["anomaly_id"] not in claimed
         ]
-        if not mine:
+        claimed.update(r["anomaly_id"] for r in mine)
+        # Anomalies before the fault starts are its own, but the one diagnosed is the first that
+        # shows the fault itself.
+        shown = [r for r in mine if r["tick"] >= fault["start_tick"]]
+        if not shown:
             scores_by_id[fault["fault_id"]] = _missed(fault)
             continue
-        claimed.update(r["anomaly_id"] for r in mine)
-        first = mine[0]
+        first = shown[0]
         trace = (
             tracing_context(
                 enabled=True,
@@ -173,6 +178,8 @@ def run_case(
             where = route_location_score(
                 sim.topology, diagnosis.root_cause_device_id, fault["root_device_id"]
             )
+        elif fault["root_device_id"] not in sim.topology:  # a power area: exact or nothing
+            where = float(diagnosis.root_cause_device_id == fault["root_device_id"])
         else:
             where = location_score(
                 sim.topology, diagnosis.root_cause_device_id, fault["root_device_id"]
@@ -298,20 +305,24 @@ def format_scores(results: Sequence[CaseResult]) -> str:
 def fault_scopes(topology: Topology, root_device_id: str) -> set[str]:
     """Nodes a fault sits on or spans, their service groups, and every node in those service
     groups. Upstream trouble hurts a whole service group, so a sibling node's anomaly belongs to
-    the same fault. A fault whose answer touches no node, such as trouble on a peering link,
-    claims nothing: it can be missed, but never takes another fault's anomalies."""
+    the same fault. The answer device itself is always in scope, so an anomaly raised on a
+    peering link belongs to that link's fault. A fault that touches no node otherwise claims
+    nothing more: it can be missed, but never takes another fault's anomalies."""
     if root_device_id in topology:
         nodes = _nodes_affected_by(topology, root_device_id)
+    elif root_device_id in power_areas(topology):
+        nodes = _nodes_of_power_area(topology, root_device_id)
     else:  # a fiber route
         nodes = {n.device_id for n in topology.of_type(Node) if n.fiber_route == root_device_id}
     groups = {p.device_id for n in nodes if isinstance(p := topology.parent(n), ServiceGroup)}
     siblings = {c.device_id for g in groups for c in topology.children(g) if isinstance(c, Node)}
-    return nodes | groups | siblings
+    return nodes | groups | siblings | {root_device_id}
 
 
 def _nodes_affected_by(topology: Topology, device_id: str) -> set[str]:
     """The node a device sits in; for a device above the nodes, every node beneath it; for a power
-    supply, the nodes holding what it feeds. None for a device with none of these."""
+    supply, everything its power area holds, since the outage that drains it darkens those homes
+    first. None for a device with none of these."""
     device = topology[device_id]
     if isinstance(device, Node):
         return {device_id}
@@ -319,8 +330,27 @@ def _nodes_affected_by(topology: Topology, device_id: str) -> set[str]:
     if above:
         return {above[0]}
     if isinstance(device, PowerSupply):
-        return set().union(*(_nodes_affected_by(topology, active) for active in device.feeds))
+        return _nodes_of_power_area(topology, device.power_area)
     return {d.device_id for d in topology.subtree(device_id) if isinstance(d, Node)}
+
+
+def _nodes_of_power_area(topology: Topology, power_area: str) -> set[str]:
+    """Nodes with homes in the area, and nodes holding actives that the area's supplies feed."""
+    nodes = {
+        _node_of(topology, m.device_id)
+        for m in topology.of_type(Modem)
+        if m.power_area == power_area
+    }
+    for supply in topology.of_type(PowerSupply):
+        if supply.power_area == power_area:
+            nodes |= {_node_of(topology, active) for active in supply.feeds}
+    return nodes
+
+
+def _node_of(topology: Topology, device_id: str) -> str:
+    if isinstance(topology[device_id], Node):
+        return device_id
+    return next(a.device_id for a in topology.ancestors(device_id) if isinstance(a, Node))
 
 
 def _missed(fault: Mapping[str, Any]) -> FaultScore:

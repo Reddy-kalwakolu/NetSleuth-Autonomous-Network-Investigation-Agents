@@ -11,7 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from netsleuth.eval.cases import Case, CustomFaultSpec, build_fault
-from netsleuth.sandbox.engine import Engine, EngineError
+from netsleuth.sandbox.engine import Engine, EngineError, power_areas
 from netsleuth.sandbox.topology import Node, Topology, generate_topology
 
 
@@ -64,6 +64,10 @@ def _check_answer_key(path: Path, spec: CustomFaultSpec, topology: Topology) -> 
     if spec.graded_level == "fiber_route":
         if root not in routes:
             raise ScenarioError(f"{path}: {root} is not a fiber route in this network")
+    elif spec.graded_level == "power_area":
+        # A power area, or a device: scenarios sealed before areas could be answers name one.
+        if root not in power_areas(topology) and root not in topology:
+            raise ScenarioError(f"{path}: {root} is not a power area or a device in this network")
     elif root not in topology:
         raise ScenarioError(f"{path}: the answer names {root}, which is not in this network")
     target = spec.correct_action.target

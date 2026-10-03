@@ -1,0 +1,12 @@
+# The utility cuts power to one grid cell for 100 minutes. Homes there lose their modems, the two
+# power supplies in the cell ride through on battery, and nothing in the plant is broken. The
+# right call is to watch, not to send anyone.
+case_id: d3-utility-outage
+topology_seed: 0
+seed: 31
+ticks: 48
+faults:
+  - kind: utility_outage
+    power_area: pa-hub1-3-4
+    at_tick: 12
+    duration_ticks: 20

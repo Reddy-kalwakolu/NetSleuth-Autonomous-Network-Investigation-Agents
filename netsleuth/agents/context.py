@@ -33,7 +33,10 @@ def scope_for(session: StorageSession, anomaly: Mapping[str, Any]) -> Scope:
     if inv.device_type[scope] == "node":
         node = scope
     else:
-        node = sorted(c for c in inv.children[scope] if inv.device_type[c] == "node")[0]
+        nodes = sorted(c for c in inv.children[scope] if inv.device_type[c] == "node")
+        if not nodes:  # outside the plant, such as a peering link: no node, group or route
+            return Scope(anomaly_scope=scope, node="", service_group="", route="")
+        node = nodes[0]
     sg = inv.parent[node]
     assert sg is not None
     return Scope(
@@ -44,6 +47,8 @@ def scope_for(session: StorageSession, anomaly: Mapping[str, Any]) -> Scope:
 def gather_context(session: StorageSession, anomaly: Mapping[str, Any]) -> Context:
     scope = scope_for(session, anomaly)
     context = Context(scope=scope)
+    if not scope.node:
+        return _network_context(session, context)
     for name, args in (
         ("get_maintenance_windows", {"scope_id": scope.node}),
         ("get_service_group_health", {"device_id": scope.node}),
@@ -52,6 +57,20 @@ def gather_context(session: StorageSession, anomaly: Mapping[str, Any]) -> Conte
     ):
         context.findings.append(call_tool(session, name, args))
     context.blast = _blast_radius(session, scope)
+    return context
+
+
+def _network_context(session: StorageSession, context: Context) -> Context:
+    """Prechecks for an anomaly outside the plant: the network wide view, and no blast radius."""
+    scope = context.scope.anomaly_scope
+    prechecks: list[tuple[str, dict[str, Any]]] = [
+        ("get_tickets", {"hours": 1}),
+        ("get_recent_changes", {}),
+    ]
+    if inventory(session).device_type.get(scope) == "peering_link":
+        prechecks.insert(0, ("get_peering_status", {"link_id": scope}))
+    for name, args in prechecks:
+        context.findings.append(call_tool(session, name, args))
     return context
 
 

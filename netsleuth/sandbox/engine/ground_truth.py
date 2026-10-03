@@ -30,6 +30,8 @@ def write_ground_truth(engine: Engine, run_id: str, directory: Path) -> Path:
                 "correct_action": f.correct_action.model_dump(),
                 "start_tick": f.start_tick,
                 "end_tick": f.end_tick,
+                "deadline_tick": f.deadline_tick,
+                "claim_from_tick": f.claim_from_tick,
                 "start_time": engine.time_of(f.start_tick).isoformat(),
             }
             for f in engine.faults

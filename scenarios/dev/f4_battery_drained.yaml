@@ -1,0 +1,12 @@
+# A two hour twenty minute utility outage outlasts the weakest battery in its cell, 120 minutes,
+# but not the next one, 151. Homes go dark first, then the supply dies and takes its amplifiers
+# down. The answer is that supply, and a generator should have got there before the battery did.
+case_id: f4-battery-drained
+topology_seed: 0
+seed: 32
+ticks: 48
+faults:
+  - kind: utility_outage
+    power_area: pa-hub1-3-3
+    at_tick: 10
+    duration_ticks: 28

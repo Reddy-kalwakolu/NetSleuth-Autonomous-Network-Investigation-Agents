@@ -27,6 +27,11 @@ TELEMETRY_TABLES = (
     "node_optical",
     "cm_events",
     "maintenance",
+    "ps_status",
+    "power_events",
+    "change_log",
+    "peering_status",
+    "tickets",
 )
 
 

@@ -45,7 +45,7 @@ class SinglePromptBaseline:
         try:
             context = gather_context(session, anomaly)
             seen = {f.query_ref for f in context.findings}
-            for checks in PLAYBOOKS.values():
+            for checks in PLAYBOOKS.values() if context.scope.node else ():
                 for check in checks:
                     result = call_tool(session, check.tool, check.args(context.scope))
                     self.tool_calls += 1

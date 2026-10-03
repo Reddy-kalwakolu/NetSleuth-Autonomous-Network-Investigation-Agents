@@ -3,14 +3,19 @@
 It sees only a storage session cut off at the moment the anomaly was detected. It never sees the
 ground truth or the true topology, only the stored inventory. It checks, in this order:
 
-1. Planned work. If a published maintenance window covers the node right now, it is planned
+1. A peering link near full. Peering congestion at that link: a backbone problem, not the plant.
+2. Planned work. If a published maintenance window covers the node right now, it is planned
    maintenance and nobody should be sent.
-2. Outages (share offline). The rule field engineers use: find the highest device whose entire
+3. Utility power. If an area is out right now and a power supply that feeds this node has run out
+   of battery, that supply. Otherwise, if most of the dark modems have no power at home, a
+   commercial power outage in the area with the most of them.
+4. Outages (share offline). The rule field engineers use: find the highest device whose entire
    downstream is dark, starting from the lowest common ancestor of the offline modems. If the whole
    node is dark and another node on the same fiber route is dark too, the route is cut.
-3. Upstream noise (SNR drop or T3 rate). Ingress, called at the node with the most modems logging
+5. Upstream trouble (SNR drop or T3 rate). If a change went into the service group or its CMTS in
+   the last hour, that change. Otherwise ingress, called at the node with the most modems logging
    T3 timeouts in the last hour.
-4. Level drops (RF). The outage rule again, applied to modems whose downstream power fell 4 dB or
+6. Level drops (RF). The outage rule again, applied to modems whose downstream power fell 4 dB or
    more, which pins a partial amplifier failure.
 
 Known blind spot: if amplifier A has no taps of its own and feeds only amplifier B, a failure of B
@@ -38,6 +43,7 @@ RF_DROP_DB = 4.0
 RF_BASELINE_POLLS = 4
 RF_POLL_TICKS = 3
 T3_WINDOW_TICKS = 12
+CHANGE_WINDOW_TICKS = 12
 
 
 def rules_baseline(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagnosis:
@@ -45,6 +51,13 @@ def rules_baseline(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagn
     scope = str(anomaly["scope_device_id"])
     signal = str(anomaly.get("signal", "share_offline"))
     inventory = load_inventory(session)
+    if signal == "peering_util":
+        return Diagnosis(
+            incident_id=incident_id,
+            root_cause_category="peering_congestion",
+            root_cause_device_id=scope,
+            summary=f"Peering link {scope} is running near full.",
+        )
     if inventory.device_type[scope] == "node":
         node_ids = [scope]
     else:
@@ -65,10 +78,121 @@ def rules_baseline(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagn
             summary=f"Maintenance window {window_id} covers {window_scope} right now.",
         )
     if signal in ("sg_snr", "t3_rate"):
+        change = _recent_change(session, inventory, scope)
+        if change is not None:
+            change_id, target = change
+            return Diagnosis(
+                incident_id=incident_id,
+                root_cause_category="config_change",
+                root_cause_device_id=target,
+                summary=f"Upstream got worse right after change {change_id} on {target}.",
+            )
         return _ingress(session, inventory, incident_id, node_ids)
     if signal == "rf_level_drop":
         return _partial(session, inventory, incident_id, scope)
+    power = _power(session, inventory, incident_id, scope)
+    if power is not None:
+        return power
     return _outage(session, inventory, incident_id, scope)
+
+
+def _recent_change(
+    session: StorageSession, inventory: Inventory, scope: str
+) -> tuple[str, str] | None:
+    """The latest change in the last hour on the scope, its service group or its CMTS."""
+    if "change_log" not in session.tables:
+        return None
+    above = {scope}
+    up = inventory.parent[scope]
+    while up is not None:
+        above.add(up)
+        up = inventory.parent[up]
+    rows = session.query(
+        "SELECT change_id, target_id FROM change_log "
+        f"WHERE tick > (SELECT max(tick) FROM sg_status) - {CHANGE_WINDOW_TICKS} "
+        "ORDER BY tick DESC"
+    )
+    for change_id, target in rows.iter_rows():
+        if target in above:
+            return str(change_id), str(target)
+    return None
+
+
+def _areas_out(session: StorageSession) -> set[str]:
+    if "power_events" not in session.tables:
+        return set()
+    rows = session.query("SELECT power_area, event FROM power_events ORDER BY tick")
+    out: set[str] = set()
+    for area, event in rows.iter_rows():
+        if event == "outage_start":
+            out.add(area)
+        else:
+            out.discard(area)
+    return out
+
+
+def _power(
+    session: StorageSession, inventory: Inventory, incident_id: str, node_id: str
+) -> Diagnosis | None:
+    """A utility outage behind this node's darkness, if there is one."""
+    out = _areas_out(session)
+    if not out:
+        return None
+    node_actives = {
+        d for d in [node_id, *_actives_under(inventory, node_id)] if d in inventory.supply_of
+    }
+    supplies = {inventory.supply_of[a] for a in node_actives}
+    drained = sorted(
+        s for s in supplies if inventory.power_area.get(s) in out and _drained(session, s)
+    )
+    if drained:
+        return Diagnosis(
+            incident_id=incident_id,
+            root_cause_category="power_supply_failure",
+            root_cause_device_id=drained[0],
+            summary=f"{drained[0]} ran out of battery during a utility outage.",
+        )
+    dark = offline_now(session) & inventory.modems_under(node_id)
+    unpowered = [m for m in dark if inventory.power_area.get(m) in out]
+    if dark and len(unpowered) * 2 >= len(dark):
+        counts: dict[str, int] = {}
+        for m in unpowered:
+            area = str(inventory.power_area[m])
+            counts[area] = counts.get(area, 0) + 1
+        area = max(sorted(counts), key=lambda a: counts[a])
+        return Diagnosis(
+            incident_id=incident_id,
+            root_cause_category="commercial_power_outage",
+            root_cause_device_id=area,
+            summary=f"{len(unpowered)} of the {len(dark)} dark modems are in {area}, "
+            "which has no utility power.",
+        )
+    return None
+
+
+def _actives_under(inventory: Inventory, device_id: str) -> list[str]:
+    found = []
+    stack = list(inventory.children.get(device_id, []))
+    while stack:
+        current = stack.pop()
+        if inventory.device_type[current] == "amplifier":
+            found.append(current)
+            stack.extend(inventory.children.get(current, []))
+    return found
+
+
+def _drained(session: StorageSession, supply: str) -> bool:
+    """A supply out of battery, or silent: its transponder dies with the actives it powers."""
+    if "ps_status" not in session.tables:
+        return False
+    rows = session.query(
+        "SELECT tick, battery_min_left FROM ps_status WHERE ps_id = ? ORDER BY tick DESC LIMIT 1",
+        [supply],
+    )
+    if rows.is_empty():
+        return True
+    now = session.query("SELECT max(tick) AS t FROM sg_status")["t"][0]
+    return bool(rows["tick"][0] < now or rows["battery_min_left"][0] == 0)
 
 
 def _active_window(

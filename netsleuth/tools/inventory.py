@@ -18,19 +18,32 @@ class Inventory:
     parent: dict[str, str | None]
     device_type: dict[str, str]
     fiber_route: dict[str, str | None]
+    power_area: dict[str, str | None] = field(default_factory=dict)
+    # Power supply to the actives it feeds, and each active back to its supply.
+    feeds: dict[str, list[str]] = field(default_factory=lambda: defaultdict(list))
+    supply_of: dict[str, str] = field(default_factory=dict)
     children: dict[str, list[str]] = field(default_factory=lambda: defaultdict(list))
     _modems: dict[str, frozenset[str]] = field(default_factory=dict)
 
     @classmethod
     def load(cls, session: StorageSession) -> "Inventory":
         rows = session.query(
-            "SELECT device_id, device_type, parent_id, fiber_route FROM topology_devices"
+            "SELECT device_id, device_type, parent_id, fiber_route, power_area "
+            "FROM topology_devices"
         )
         inventory = cls(
             parent=dict(zip(rows["device_id"], rows["parent_id"], strict=True)),
             device_type=dict(zip(rows["device_id"], rows["device_type"], strict=True)),
             fiber_route=dict(zip(rows["device_id"], rows["fiber_route"], strict=True)),
+            power_area=dict(zip(rows["device_id"], rows["power_area"], strict=True)),
         )
+        if "topology_edges" in session.tables:
+            powers = session.query(
+                "SELECT from_id, to_id FROM topology_edges WHERE edge_type = 'powers'"
+            )
+            for supply, active in powers.iter_rows():
+                inventory.feeds[supply].append(active)
+                inventory.supply_of[active] = supply
         for device_id, parent_id in inventory.parent.items():
             if parent_id is not None:
                 inventory.children[parent_id].append(device_id)
@@ -59,6 +72,17 @@ class Inventory:
     @property
     def routes(self) -> set[str]:
         return {r for d, r in self.fiber_route.items() if r and self.device_type[d] == "node"}
+
+    @property
+    def power_areas(self) -> set[str]:
+        return {a for a in self.power_area.values() if a}
+
+    def node_of(self, device_id: str) -> str | None:
+        """The node a device sits in, or the device itself if it is a node."""
+        current: str | None = device_id
+        while current is not None and self.device_type[current] != "node":
+            current = self.parent[current]
+        return current
 
     def nodes_on_route(self, route: str) -> list[str]:
         return sorted(

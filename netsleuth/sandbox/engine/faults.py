@@ -1,5 +1,6 @@
 """Faults: named bundles of primitives plus the answer an agent should reach."""
 
+import math
 from datetime import datetime
 from typing import Literal
 
@@ -8,15 +9,19 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 from netsleuth.sandbox.engine.clock import DEFAULT_START, TICK_MINUTES, first_tick_in_window
 from netsleuth.sandbox.engine.primitives import (
     AddUpstreamNoise,
+    ConfigChange,
     CutFiberRoute,
     DegradeLevels,
     EngineError,
     MaintenanceWindow,
+    PeeringLoad,
     Restore,
     ScheduledEffect,
     TakeDown,
+    UtilityOutage,
 )
-from netsleuth.sandbox.topology import Amplifier, Node, ServiceGroup, Topology
+from netsleuth.sandbox.topology import Amplifier, Cmts, Modem, Node, ServiceGroup, Topology
+from netsleuth.sandbox.topology.models import PeeringLink, PowerSupply
 
 RootCauseCategory = Literal[
     "amplifier_failure",
@@ -81,6 +86,11 @@ class Fault(BaseModel):
     onset_tick: NonNegativeInt | None = None
     # When the fault's effects stop, if they do. Anomalies after it aren't this fault's.
     end_tick: NonNegativeInt | None = None
+    # The last tick the right action can still prevent the damage, such as a battery running out.
+    deadline_tick: NonNegativeInt | None = None
+    # When the fault's anomalies start to belong to it, if before it starts. A drained battery
+    # starts when its actives drop, but the homes that went dark at the outage are its too.
+    claim_from_tick: NonNegativeInt | None = None
 
     @property
     def start_tick(self) -> int:
@@ -250,6 +260,156 @@ def planned_maintenance(
     )
 
 
-def _require(topology: Topology, device_id: str, kind: type, label: str) -> None:
+def power_areas(topology: Topology) -> set[str]:
+    """Every power area with a home or a power supply in it."""
+    return {m.power_area for m in topology.of_type(Modem)} | {
+        p.power_area for p in topology.of_type(PowerSupply)
+    }
+
+
+def utility_outage(
+    topology: Topology,
+    power_area: str,
+    *,
+    at_tick: int,
+    duration_ticks: int,
+    incident_id: str,
+    fault_id: str | None = None,
+    tick_minutes: int = TICK_MINUTES,
+) -> Fault:
+    """D3, or F4 if it lasts too long. The utility cuts power to an area. If every power supply
+    there outlasts the outage on battery, the plant rides through, homes come back on their own
+    and the right response is to watch. If a battery runs out first, its node or amplifiers go
+    down and take service with them, so the answer becomes that supply, and a generator has to
+    get there before its battery dies. The F4 fault starts when the battery dies, since that is
+    when the data first tells it apart from a harmless outage, and it also owns the anomalies from
+    the moment the power went out.
+
+    The battery maths matches the engine's: a supply drains one tick per tick from the tick after
+    the outage starts, and runs out on the first tick it has drained its full runtime."""
+    if power_area not in power_areas(topology):
+        raise EngineError(f"{power_area} is not a power area in this network")
+    effect = ScheduledEffect(
+        at_tick=at_tick,
+        effect=UtilityOutage(power_area=power_area, duration_ticks=duration_ticks),
+    )
+    end = at_tick + duration_ticks
+    drains = sorted(
+        (at_tick + math.ceil(p.battery_runtime_min / tick_minutes), p.device_id)
+        for p in topology.of_type(PowerSupply)
+        if p.power_area == power_area
+    )
+    if drains and drains[0][0] < end:
+        deadline, supply = drains[0]
+        if len(drains) > 1 and drains[1][0] == deadline:
+            raise EngineError(
+                f"{supply} and {drains[1][1]} run out of battery on the same tick, so the "
+                "answer would be ambiguous; pick another area or duration"
+            )
+        return Fault(
+            fault_id=fault_id or f"f4-{supply}-t{at_tick}",
+            incident_id=incident_id,
+            category="power_supply_failure",
+            root_device_id=supply,
+            graded_level="power_supply",
+            correct_action=CorrectAction(action="dispatch_generator", target=supply),
+            effects=(effect,),
+            variant="battery_drained",
+            onset_tick=deadline,
+            end_tick=end,
+            deadline_tick=deadline,
+            claim_from_tick=at_tick,
+        )
+    return Fault(
+        fault_id=fault_id or f"d3-{power_area}-t{at_tick}",
+        incident_id=incident_id,
+        category="commercial_power_outage",
+        root_device_id=power_area,
+        graded_level="power_area",
+        correct_action=CorrectAction(action="monitor", target=None),
+        effects=(effect,),
+        variant="rode_through",
+        end_tick=end,
+    )
+
+
+def config_push(
+    topology: Topology,
+    target_id: str,
+    *,
+    at_tick: int,
+    incident_id: str,
+    snr_drop_db: float = 6.0,
+    change_id: str | None = None,
+    fault_id: str | None = None,
+) -> Fault:
+    """F5. A bad configuration push to a CMTS or one service group. Every service group under it
+    loses upstream SNR at once, at whatever hour the change went in, right after the change log
+    entry. Rolling the change back fixes it."""
+    _require(topology, target_id, (Cmts, ServiceGroup), "a CMTS or service group")
+    change = change_id or f"chg-{target_id}-t{at_tick}"
+    level: GradedLevel = "cmts" if isinstance(topology[target_id], Cmts) else "service_group"
+    return Fault(
+        fault_id=fault_id or f"f5-{target_id}-t{at_tick}",
+        incident_id=incident_id,
+        category="config_change",
+        root_device_id=target_id,
+        graded_level=level,
+        correct_action=CorrectAction(
+            action="rollback_change", target=None, params={"change_id": change}
+        ),
+        effects=(
+            ScheduledEffect(
+                at_tick=at_tick,
+                effect=ConfigChange(change_id=change, target_id=target_id, snr_drop_db=snr_drop_db),
+            ),
+        ),
+    )
+
+
+def peering_congestion(
+    topology: Topology,
+    link_id: str,
+    *,
+    at_tick: int,
+    incident_id: str,
+    peak_util_pct: float = 99.0,
+    start_hour: int = 19,
+    end_hour: int = 23,
+    fault_id: str | None = None,
+    start: datetime = DEFAULT_START,
+    tick_minutes: int = TICK_MINUTES,
+) -> Fault:
+    """D2. A peering link runs full at evening peak. Customers everywhere call about slow service
+    while every RF measurement is healthy. Nothing in the plant needs a truck: the backbone team
+    has to move traffic. The fault starts when the load first shows."""
+    _require(topology, link_id, PeeringLink, "a peering link")
+    return Fault(
+        fault_id=fault_id or f"d2-{link_id}-t{at_tick}",
+        incident_id=incident_id,
+        category="peering_congestion",
+        root_device_id=link_id,
+        graded_level="peering_link",
+        correct_action=CorrectAction(
+            action="route_to_team", target=None, params={"team": "backbone"}
+        ),
+        effects=(
+            ScheduledEffect(
+                at_tick=at_tick,
+                effect=PeeringLoad(
+                    link_id=link_id,
+                    peak_util_pct=peak_util_pct,
+                    start_hour=start_hour,
+                    end_hour=end_hour,
+                ),
+            ),
+        ),
+        onset_tick=first_tick_in_window(
+            at_tick, start_hour, end_hour, start=start, tick_minutes=tick_minutes
+        ),
+    )
+
+
+def _require(topology: Topology, device_id: str, kind: type | tuple[type, ...], label: str) -> None:
     if device_id not in topology or not isinstance(topology[device_id], kind):
         raise EngineError(f"{device_id} is not {label}")

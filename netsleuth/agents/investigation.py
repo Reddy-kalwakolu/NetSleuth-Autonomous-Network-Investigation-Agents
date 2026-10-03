@@ -109,7 +109,10 @@ class InvestigationAgent:
                 blast=render_blast(ctx.blast),
             )
             hypotheses = llm.ask(Hypotheses, system, user, run_name="hypothesize")
-            offered = checks_for(h.category for h in hypotheses.ranked[:2])
+            # Plant checks need a node. An anomaly outside the plant goes straight to scoring.
+            offered = (
+                checks_for(h.category for h in hypotheses.ranked[:2]) if ctx.scope.node else []
+            )
             return {"hypotheses": hypotheses, "offered": offered, "done": not offered}
 
         def gather(state: State) -> State:

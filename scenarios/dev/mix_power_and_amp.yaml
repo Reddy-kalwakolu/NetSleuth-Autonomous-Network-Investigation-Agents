@@ -1,0 +1,15 @@
+# A grid cell with homes but no power supplies loses utility power, and half an hour later an
+# amplifier fails on node 04, which has no homes in that cell. Two unrelated outages close
+# together, and only one needs a truck.
+case_id: mix-power-and-amp
+topology_seed: 0
+seed: 36
+ticks: 60
+faults:
+  - kind: utility_outage
+    power_area: pa-hub1-5-3
+    at_tick: 20
+    duration_ticks: 18
+  - kind: amplifier_failure
+    amp_id: amp-hub1-node04-a1
+    at_tick: 26

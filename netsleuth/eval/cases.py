@@ -27,9 +27,12 @@ from netsleuth.sandbox.engine import (
     RootCauseCategory,
     ScheduledEffect,
     amplifier_failure,
+    config_push,
     fiber_cut,
     ingress_noise,
+    peering_congestion,
     planned_maintenance,
+    utility_outage,
     write_ground_truth,
 )
 from netsleuth.sandbox.telemetry import TelemetryGenerator
@@ -88,6 +91,38 @@ class PlannedMaintenanceSpec(BaseModel):
         return self
 
 
+class UtilityOutageSpec(BaseModel):
+    """D3, or F4 when a battery in the area runs out before power comes back."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["utility_outage"] = "utility_outage"
+    power_area: str
+    at_tick: NonNegativeInt
+    duration_ticks: PositiveInt
+
+
+class ConfigPushSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["config_push"] = "config_push"
+    target_id: str
+    at_tick: NonNegativeInt
+    snr_drop_db: PositiveFloat = 6.0
+    change_id: str | None = None
+
+
+class PeeringCongestionSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["peering_congestion"] = "peering_congestion"
+    link_id: str
+    at_tick: NonNegativeInt
+    peak_util_pct: float = Field(default=99.0, gt=0, le=100)
+    start_hour: int = Field(default=19, ge=0, le=23)
+    end_hour: int = Field(default=23, ge=0, le=24)
+
+
 class CustomFaultSpec(BaseModel):
     """A fault written directly as primitives, with its answer spelled out. This is how
     someone else can write sealed scenarios without touching Python."""
@@ -110,6 +145,9 @@ FaultSpec = Annotated[
     | FiberCutSpec
     | IngressNoiseSpec
     | PlannedMaintenanceSpec
+    | UtilityOutageSpec
+    | ConfigPushSpec
+    | PeeringCongestionSpec
     | CustomFaultSpec,
     Field(discriminator="kind"),
 ]
@@ -151,6 +189,33 @@ def build_fault(spec: FaultSpec, topology: Topology, incident_id: str) -> Fault:
                 end_tick=spec.end_tick,
                 incident_id=incident_id,
                 publish_tick=spec.publish_tick,
+            )
+        case UtilityOutageSpec():
+            return utility_outage(
+                topology,
+                spec.power_area,
+                at_tick=spec.at_tick,
+                duration_ticks=spec.duration_ticks,
+                incident_id=incident_id,
+            )
+        case ConfigPushSpec():
+            return config_push(
+                topology,
+                spec.target_id,
+                at_tick=spec.at_tick,
+                incident_id=incident_id,
+                snr_drop_db=spec.snr_drop_db,
+                change_id=spec.change_id,
+            )
+        case PeeringCongestionSpec():
+            return peering_congestion(
+                topology,
+                spec.link_id,
+                at_tick=spec.at_tick,
+                incident_id=incident_id,
+                peak_util_pct=spec.peak_util_pct,
+                start_hour=spec.start_hour,
+                end_hour=spec.end_hour,
             )
         case CustomFaultSpec():
             return Fault(

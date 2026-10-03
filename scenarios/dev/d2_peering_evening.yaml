@@ -1,0 +1,10 @@
+# Peering link 2 runs full every evening from 19:00. Customers all over the network call about
+# slow service while every RF reading is healthy. The backbone team has to move traffic.
+case_id: d2-peering-evening
+topology_seed: 0
+seed: 35
+ticks: 252
+faults:
+  - kind: peering_congestion
+    link_id: peer-2
+    at_tick: 0
