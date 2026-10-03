@@ -74,3 +74,26 @@ def test_peering_congestion_is_called_at_the_link(tmp_path: Path, hour: int) -> 
     spec = PeeringCongestionSpec(link_id=link, at_tick=0, start_hour=hour, end_hour=23)
 
     assert score(tmp_path, (hour + 1) * 12, spec) == (1.0, 1.0, 0)
+
+
+def test_a_supply_silenced_by_a_failed_amplifier_is_not_called_drained(tmp_path: Path) -> None:
+    # The supply's transponder talks through the amplifier, so it goes quiet when the amplifier
+    # dies, during a utility outage its battery easily rides through.
+    from netsleuth.eval import AmplifierFailureSpec
+
+    result = run_case(
+        Case(
+            case_id="mix",
+            ticks=40,
+            faults=[
+                UtilityOutageSpec(power_area=AREA, at_tick=10, duration_ticks=22),
+                AmplifierFailureSpec(amp_id="amp-hub1-node01-a6", at_tick=26),
+            ],
+        ),
+        rules_baseline,
+        tmp_path / "d",
+        tmp_path / "g",
+    )
+
+    amp = next(f for f in result.faults if f.true_category == "amplifier_failure")
+    assert amp.predicted_category != "power_supply_failure"

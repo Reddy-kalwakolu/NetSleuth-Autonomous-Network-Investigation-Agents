@@ -177,3 +177,30 @@ def test_a_power_area_level_answer_may_still_name_a_device(tmp_path: Path) -> No
     )
 
     assert load_case(write(tmp_path / "old.yaml", text)).faults
+
+
+def outage_yaml(area: str, at_tick: int, duration: int) -> str:
+    return (
+        f"  - kind: utility_outage\n    power_area: {area}\n    at_tick: {at_tick}\n"
+        f"    duration_ticks: {duration}\n"
+    )
+
+
+def test_outages_in_one_area_closer_than_a_full_recharge_are_refused(tmp_path: Path) -> None:
+    # The answer key assumes full batteries, which only holds once they have recharged.
+    path = write(
+        tmp_path / "twice.yaml",
+        "ticks: 60\nfaults:\n" + outage_yaml(AREA, 0, 20) + outage_yaml(AREA, 30, 20),
+    )
+
+    with pytest.raises(ScenarioError, match="recharge"):
+        load_case(path)
+
+
+def test_outages_in_different_areas_may_overlap(tmp_path: Path) -> None:
+    path = write(
+        tmp_path / "two_areas.yaml",
+        "ticks: 60\nfaults:\n" + outage_yaml(AREA, 0, 20) + outage_yaml("pa-hub1-5-3", 5, 20),
+    )
+
+    assert len(load_case(path).faults) == 2

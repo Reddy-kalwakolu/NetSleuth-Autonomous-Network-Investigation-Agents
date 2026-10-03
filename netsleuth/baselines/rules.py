@@ -44,6 +44,7 @@ RF_BASELINE_POLLS = 4
 RF_POLL_TICKS = 3
 T3_WINDOW_TICKS = 12
 CHANGE_WINDOW_TICKS = 12
+MINUTES_PER_TICK = 5
 
 
 def rules_baseline(session: StorageSession, anomaly: Mapping[str, Any]) -> Diagnosis:
@@ -182,17 +183,23 @@ def _actives_under(inventory: Inventory, device_id: str) -> list[str]:
 
 
 def _drained(session: StorageSession, supply: str) -> bool:
-    """A supply out of battery, or silent: its transponder dies with the actives it powers."""
+    """A supply that has run out of battery. Its transponder dies with the actives it powers, so
+    a drained supply is usually silent, but silence alone isn't enough: a failure upstream of it
+    silences it too. It counts as drained only if its last report was on battery with less charge
+    left than the time it has been quiet since."""
     if "ps_status" not in session.tables:
         return False
     rows = session.query(
-        "SELECT tick, battery_min_left FROM ps_status WHERE ps_id = ? ORDER BY tick DESC LIMIT 1",
+        "SELECT tick, on_battery, battery_min_left FROM ps_status WHERE ps_id = ? "
+        "ORDER BY tick DESC LIMIT 1",
         [supply],
     )
     if rows.is_empty():
-        return True
+        return False
+    last = rows.row(0, named=True)
     now = session.query("SELECT max(tick) AS t FROM sg_status")["t"][0]
-    return bool(rows["tick"][0] < now or rows["battery_min_left"][0] == 0)
+    quiet_min = (int(now) - int(last["tick"])) * MINUTES_PER_TICK
+    return bool(last["on_battery"]) and last["battery_min_left"] <= quiet_min + MINUTES_PER_TICK
 
 
 def _active_window(

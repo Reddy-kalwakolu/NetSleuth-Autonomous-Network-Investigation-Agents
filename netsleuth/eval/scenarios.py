@@ -5,13 +5,16 @@ A scenario names a network, seeds, a length and the faults to inject. Anything w
 file loads, not halfway through a run.
 """
 
+from itertools import pairwise
 from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
 from netsleuth.eval.cases import Case, CustomFaultSpec, build_fault
-from netsleuth.sandbox.engine import Engine, EngineError, power_areas
+from netsleuth.sandbox.engine import Engine, EngineError, Fault, UtilityOutage, power_areas
+from netsleuth.sandbox.engine.clock import TICK_MINUTES
+from netsleuth.sandbox.engine.engine import RECHARGE_HOURS
 from netsleuth.sandbox.topology import Node, Topology, generate_topology
 
 
@@ -47,6 +50,7 @@ def load_case(path: Path) -> Case:
     for spec in case.faults:
         if isinstance(spec, CustomFaultSpec):
             _check_answer_key(path, spec, topology)
+    _check_outage_spacing(path, faults)
     for fault in faults:
         if fault.start_tick >= case.ticks:
             raise ScenarioError(
@@ -54,6 +58,29 @@ def load_case(path: Path) -> Case:
                 f"at tick {case.ticks - 1}"
             )
     return case
+
+
+def _check_outage_spacing(path: Path, faults: list[Fault]) -> None:
+    """Outages in one area must be a full recharge apart. Whether a battery outlasts an outage is
+    worked out assuming it starts full, so a second outage on half charged batteries could drain
+    one while the answer key says the plant rode through."""
+    recharge_ticks = RECHARGE_HOURS * 60 // TICK_MINUTES
+    spans: dict[str, list[tuple[int, int]]] = {}
+    for fault in faults:
+        for scheduled in fault.effects:
+            effect = scheduled.effect
+            if isinstance(effect, UtilityOutage):
+                spans.setdefault(effect.power_area, []).append(
+                    (scheduled.at_tick, scheduled.at_tick + effect.duration_ticks)
+                )
+    for area, outages in spans.items():
+        outages.sort()
+        for (_, end), (start, _) in pairwise(outages):
+            if start < end + recharge_ticks:
+                raise ScenarioError(
+                    f"{path}: utility outages on {area} at ticks {end} and {start} are closer "
+                    f"than a full battery recharge ({RECHARGE_HOURS} h); space them out"
+                )
 
 
 def _check_answer_key(path: Path, spec: CustomFaultSpec, topology: Topology) -> None:
